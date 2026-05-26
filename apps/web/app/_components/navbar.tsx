@@ -14,7 +14,7 @@ const Navbar = () => {
       <Link href={"/#pricing"} className="hover:bg-neutral-700 px-3 py-1 rounded-sm">Pricing</Link>
     </div>
 
-    <Link href={"/login"} ><Button className="cursor-pointer" size={"lg"}>Login</Button></Link>
+    <Link href={"/dashboard"} ><Button className="cursor-pointer" size={"lg"}>Dashboard</Button></Link>
 
     </nav>
 

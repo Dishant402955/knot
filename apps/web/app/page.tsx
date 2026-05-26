@@ -3,6 +3,7 @@ import { Navbar } from "@/app/_components/navbar";
 import { Features } from "@/app/_components/features";
 import { UseCases } from "@/app/_components/use-cases";
 import { Footer } from "@/app/_components/footer";
+import { Pricing } from "@/app/_components/pricing";
 
 const  Home = () => {
   return (
@@ -11,6 +12,7 @@ const  Home = () => {
     <Hero/>
     <Features/>
     <UseCases/>
+    <Pricing/>
     <Footer/>
    </div>
   );
