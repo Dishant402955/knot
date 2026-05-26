@@ -1,6 +1,8 @@
 import { Hero } from "@/app/_components/hero";
 import { Navbar } from "@/app/_components/navbar";
 import { Features } from "@/app/_components/features";
+import { UseCases } from "@/app/_components/use-cases";
+import { Footer } from "@/app/_components/footer";
 
 const  Home = () => {
   return (
@@ -8,6 +10,8 @@ const  Home = () => {
     <Navbar/>
     <Hero/>
     <Features/>
+    <UseCases/>
+    <Footer/>
    </div>
   );
 }
