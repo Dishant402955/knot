@@ -1,6 +1,6 @@
 const  Home = () => {
   return (
-   <div>Hello</div>
+   <div className="h-screen w-full flex justify-center items-center ">Hello</div>
   );
 }
 
