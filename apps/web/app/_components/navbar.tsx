@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
 const Navbar = () => {
-    return     <nav className="absolute top-4 left-[10%] w-[80%] h-16 bg-neutral-800/60 px-15 flex items-center justify-between rounded-lg">
+    return     <nav className="fixed top-4 left-[10%] w-[80%] h-16 bg-neutral-800/90 px-15 flex items-center justify-between rounded-lg">
 
     <Logo/>
 
