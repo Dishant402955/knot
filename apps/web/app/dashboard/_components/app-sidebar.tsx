@@ -8,16 +8,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
 import { Settings, Video, Folder, Bell, Home } from "lucide-react"
+import { UserButton } from "@clerk/nextjs"
 
-// This is sample data.
 const data = {
   navMain: [
     {
@@ -52,7 +49,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>   
             <div>
-                  <Logo/>
+                  <Logo classname=""/>
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
