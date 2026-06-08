@@ -1,5 +1,5 @@
-import { FolderCard } from "./_components/folder-card";
-import { VideoCard } from "./_components/video-card";
+import { FolderCard } from "@/app/dashboard/_components/folder-card";
+import { VideoCard } from "@/app/dashboard/_components/video-card";
 
 const DashboardPage = () => {
   return (

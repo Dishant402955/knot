@@ -5,17 +5,17 @@ import { UseCases } from "@/app/_components/use-cases";
 import { Footer } from "@/app/_components/footer";
 import { Pricing } from "@/app/_components/pricing";
 
-const  Home = () => {
+const Home = () => {
   return (
-   <div className="h-screen w-full flex-col justify-center items-center relative">
-    <Navbar/>
-    <Hero/>
-    <Features/>
-    <UseCases/>
-    <Pricing/>
-    <Footer/>
-   </div>
+    <div className="h-screen w-full flex-col justify-center items-center relative">
+      <Navbar />
+      <Hero />
+      <Features />
+      <UseCases />
+      <Pricing />
+      <Footer />
+    </div>
   );
-}
+};
 
 export default Home;

@@ -1,4 +1,4 @@
-import * as React from "react"
+import * as React from "react";
 
 import {
   Sidebar,
@@ -9,47 +9,49 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import Link from "next/link"
-import { Logo } from "@/components/logo"
-import { Settings, Video, Folder, Bell, Home } from "lucide-react"
-import { UserButton } from "@clerk/nextjs"
+} from "@/components/ui/sidebar";
+import Link from "next/link";
+import { Logo } from "@/components/logo";
+import { Settings, Video, Folder, Bell, Home } from "lucide-react";
 
 const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "/dashboard",      icon : <Home/>
+      url: "/dashboard",
+      icon: <Home />,
     },
     {
       title: "Videos",
-      url: "/dashboard/videos",      icon : <Video/>
+      url: "/dashboard/videos",
+      icon: <Video />,
     },
     {
       title: "Folders",
-      url: "/dashboard/folders",      icon : <Folder/>
+      url: "/dashboard/folders",
+      icon: <Folder />,
     },
     {
       title: "Settings",
       url: "/dashboard/settings",
-      icon : <Settings/>
+      icon: <Settings />,
     },
     {
       title: "Notifications",
       url: "/dashboard/notifications",
-            icon : <Bell/>
+      icon: <Bell />,
     },
   ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props}>
       <SidebarHeader>
         <SidebarMenu>
-          <SidebarMenuItem>   
+          <SidebarMenuItem>
             <div>
-                  <Logo classname=""/>
+              <Logo classname="" />
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -61,10 +63,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenuItem key={item.title} className="my-1">
                 <SidebarMenuButton asChild>
                   <Link href={item.url} className="text-[16px] ">
-                  <span className="flex justify-center items-center gap-x-2">
-                    {item.icon}
-                    {item.title}
-                  </span>
+                    <span className="flex justify-center items-center gap-x-2">
+                      {item.icon}
+                      {item.title}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -74,5 +76,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
