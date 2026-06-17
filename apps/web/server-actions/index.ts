@@ -1,22 +1,28 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq } from "drizzle-orm";
-import { usersTable } from "@/db/schema";
+import {
+  comments,
+  folders,
+  notifications,
+  videoSegments,
+  videos,
+} from "@/db/schema";
 
 const db = drizzle(process.env.DATABASE_URL!);
 
 async function main() {
-  const user: typeof usersTable.$inferInsert = {
-    name: "John",
-    age: 30,
-    email: "john@example.com",
+  const folder: typeof folders.$inferInsert = {
+    userId: " efefeff",
+    name: "dvff",
+    parentId: "396ec287-938d-48c8-a1b1-d8fe2429fa07",
   };
 
-  await db.insert(usersTable).values(user);
+  await db.insert(folders).values(folder);
   console.log("New user created!");
 
-  const users = await db.select().from(usersTable);
-  console.log("Getting all users from the database: ", users);
+  const folderss = await db.select().from(folders);
+  console.log("Getting all folders from the database: ", folderss);
+
   /*
   const users: {
     id: number;

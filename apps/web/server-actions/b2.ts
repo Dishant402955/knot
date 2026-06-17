@@ -46,6 +46,7 @@ async function uploadFile(filePath: string) {
   };
 }
 
+// testing purpose
 async function main() {
   try {
     // this path is from relative to web - means think like you are in web folder and then set the path
@@ -61,5 +62,4 @@ async function main() {
     console.error(error);
   }
 }
-
 main();
