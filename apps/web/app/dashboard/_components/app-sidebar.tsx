@@ -62,9 +62,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {data.navMain.map((item) => (
               <SidebarMenuItem key={item.title} className="my-1">
                 <SidebarMenuButton asChild>
-                  <Link href={item.url} className="text-[16px] ">
-                    <span className="flex justify-center items-center gap-x-2">
-                      {item.icon}
+                  <Link href={item.url} className="text-[15px] ">
+                    <span className="flex justify-center items-center gap-x-3">
+                      <p className="text-[20px]">{item.icon}</p>
                       {item.title}
                     </span>
                   </Link>

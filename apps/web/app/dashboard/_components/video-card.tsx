@@ -11,7 +11,7 @@ const VideoCard = ({
   footer,
 }: {
   title: string;
-  description: string;
+  description: string | null;
   footer: string;
 }) => {
   return (

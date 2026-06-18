@@ -5,7 +5,7 @@ const FolderCard = ({
   description,
 }: {
   title: string;
-  description: string;
+  description: string | null;
 }) => {
   return (
     <Card className="w-80">
