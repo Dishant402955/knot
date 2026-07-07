@@ -1,79 +1,131 @@
-import * as React from "react";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import Link from "next/link";
-import { Logo } from "@/components/logo";
-import { Settings, Video, Folder, Bell, Home } from "lucide-react";
 
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: <Home />,
-    },
-    {
-      title: "Videos",
-      url: "/dashboard/videos",
-      icon: <Video />,
-    },
-    {
-      title: "Folders",
-      url: "/dashboard/folders",
-      icon: <Folder />,
-    },
-    {
-      title: "Settings",
-      url: "/dashboard/settings",
-      icon: <Settings />,
-    },
-    {
-      title: "Notifications",
-      url: "/dashboard/notifications",
-      icon: <Bell />,
-    },
-  ],
+import { LogoMark } from "@/components/logo";
+
+import {
+  Bell,
+  Folder,
+  Home,
+  Settings,
+  Video,
+  type LucideIcon,
+} from "lucide-react";
+
+const navMain: {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: Home,
+  },
+  {
+    title: "Videos",
+    url: "/dashboard/videos",
+    icon: Video,
+  },
+  {
+    title: "Folders",
+    url: "/dashboard/folders",
+    icon: Folder,
+  },
+  {
+    title: "Settings",
+    url: "/dashboard/settings",
+    icon: Settings,
+  },
+  {
+    title: "Notifications",
+    url: "/dashboard/notifications",
+    icon: Bell,
+  },
+];
+
+const isNavActive = (url: string, pathname: string) => {
+  if (url === "/dashboard") {
+    return pathname === "/dashboard";
+  }
+
+  if (url === "/dashboard/folders") {
+    return (
+      pathname === "/dashboard/folders" ||
+      pathname.startsWith("/dashboard/folder/")
+    );
+  }
+
+  return pathname === url || pathname.startsWith(`${url}/`);
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname();
+
   return (
-    <Sidebar {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <div>
-              <Logo classname="" />
-            </div>
+            <SidebarMenuButton
+              asChild
+              size="lg"
+              className="hover:bg-transparent active:bg-transparent"
+            >
+              <Link href="/dashboard">
+                <LogoMark className="size-7" />
+
+                <span className="font-extrabold text-lg">Knot</span>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
+
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+
           <SidebarMenu>
-            {data.navMain.map((item) => (
-              <SidebarMenuItem key={item.title} className="my-1">
-                <SidebarMenuButton asChild>
-                  <Link href={item.url} className="text-[15px] ">
-                    <span className="flex justify-center items-center gap-x-3">
-                      <p className="text-[20px]">{item.icon}</p>
-                      {item.title}
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            {navMain.map((item) => {
+              const active = isNavActive(item.url, pathname);
+              const Icon = item.icon;
+
+              return (
+                <SidebarMenuItem key={item.title} className="my-0.5">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={active}
+                    tooltip={item.title}
+                    className="h-9 text-[15px]"
+                  >
+                    <Link href={item.url}>
+                      <Icon className="size-5" />
+
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+
       <SidebarRail />
     </Sidebar>
   );
