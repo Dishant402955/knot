@@ -130,10 +130,13 @@ The single backend for browser and desktop.
 | Area | Routes / behavior |
 |------|-------------------|
 | Sidebar | Icon-collapsible nav; active route highlighted; links to Dashboard, Videos, Folders, Settings, Notifications |
+| Home | `/dashboard` — recent folders and videos with shared grid/list toggle |
 | Folders | `/dashboard/folders` (root list), `/dashboard/folder/:id` (detail); grid or list view; nested CRUD with breadcrumbs |
 | Settings | `/dashboard/settings` — Clerk `UserProfile` (account, security) |
+| Notifications | `/dashboard/notifications` — read-only list + empty state |
 | Videos | `/dashboard/videos` — list only; no create/edit yet |
-| Home | `/dashboard` — placeholder (recent activity not wired) |
+
+For remaining web work (video CRUD, watch page, share links, etc.), see [Project Status](./project-status.md#remaining--web-app).
 
 Folder mutations enforce same-level unique names, block circular parent moves, and recursively delete subfolders. Videos in a deleted folder get `folderId` set to null (DB `onDelete: set null`).
 

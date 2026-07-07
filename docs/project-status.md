@@ -13,11 +13,12 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Folders (CRUD + UI) | Done |
 | Videos (metadata) | Partial |
 | B2 storage | Prototype only |
+| Watch page & playback | Not started |
+| Share links | Not started |
+| Comments & notifications | Partial (list UI only) |
 | API routes (desktop) | Not started |
-| Record / upload / playback | Not started |
-| Share links & watch page | Not started |
 | Desktop (Electron) app | Not started |
-| Comments & notifications | Schema only |
+| Infra (CI, tests) | Not started |
 
 ---
 
@@ -30,18 +31,88 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - **Auth (web)** — Clerk provider, sign-in/sign-up pages, `proxy.ts` route protection (Next.js 16), `currentUser()` guards in folder server actions, post-login redirect to `/dashboard`.
 - **Dashboard** — layout with header bar (sidebar trigger + `UserButton`), icon-collapsible sidebar with active-route highlight, home page with recent folders/videos and shared grid/list toggle, notifications list page, settings (`UserProfile`).
 - **Folders** — full CRUD, nested folders, duplicate-name validation, root list page, detail page (`/dashboard/folder/:id`), breadcrumbs, grid/list view toggle, folder cards + rows, 3-dot actions menu, real video counts, recursive delete.
-- **Videos (metadata)** — `getAllUserVideos`, videos list page (read-only).
+- **Videos (metadata)** — `getAllUserVideos`, videos list page (read-only), video row component for list view.
+- **Notifications** — `getAllUserNotifications`, list page with empty state (read-only).
 - **B2 (prototype)** — standalone upload test script (`server-actions/b2.ts`).
 
 ---
 
-## Known gaps (fix before core product)
+## Remaining — web app
 
-| Gap | Why it matters |
-|-----|----------------|
-| No video create/edit/delete | Only list exists; no UI or server actions for mutations |
-| Videos not assignable to folders | `folderId` in schema but not used in app code |
-| No Drizzle migrations committed | Schema defined but `drizzle/` is empty |
+Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url, segments, bearer auth) are listed separately at the end.
+
+### Foundation
+
+| # | Task | Notes |
+|---|------|-------|
+| 1 | **Database migrations** | Generate and commit Drizzle migrations; run against Postgres (`drizzle/` is empty) |
+
+### Dashboard — videos
+
+| # | Task | Notes |
+|---|------|-------|
+| 2 | **Video metadata CRUD** | Create / edit / delete server actions + UI on videos page, folder detail, optional video detail page |
+| 3 | **Folder assignment** | Wire `folderId` so videos can be organized into folders (schema exists, not used in app) |
+| 4 | **Videos page polish** | Grid/list toggle (like folders), actions menu, richer empty states |
+| 5 | **Folder detail — videos section** | Grid/list toggle + video actions once CRUD exists; read-only cards today |
+
+### Core product — playback & sharing
+
+| # | Task | Notes |
+|---|------|-------|
+| 6 | **Watch page** (`/watch/[videoId]`) | Load video + segments; progressive playback (MSE); poll for new chunks while `RECORDING`; "still recording" UI |
+| 7 | **B2 playback integration** | Signed GET URLs for chunks and thumbnails (upload prototype exists; playback not productized) |
+| 8 | **Visibility enforcement** | `PRIVATE` / `PUBLIC` / `AUTHENTICATED` checks before serving watch page or signed URLs |
+| 9 | **`proxy.ts` public routes** | Allow `/watch/:id` without sign-in for public videos; short links (`/r/[slug]`) later |
+| 10 | **Share links UX** | Copy-link from dashboard; open watch page |
+
+### Social & notifications
+
+| # | Task | Notes |
+|---|------|-------|
+| 11 | **Comments** | Schema only — UI + server actions (likely on watch page) |
+| 12 | **Notifications polish** | Mark as read; create notifications on events; optional real-time |
+
+### Auth (web remainder)
+
+| # | Task | Notes |
+|---|------|-------|
+| 13 | **Watch-page auth rules** | Public route exceptions + visibility logic in `proxy.ts` and watch page |
+
+### Polish & infra
+
+| # | Task | Notes |
+|---|------|-------|
+| 14 | **VideoCard improvements** | Thumbnails, status badges, links to watch/edit |
+| 15 | **Tests & CI** | None yet |
+| 16 | **Production B2 config** | Env, bucket policies, error handling beyond dev script |
+
+### Suggested web build order
+
+| Step | Task | Depends on |
+|------|------|------------|
+| 1 | Migrations | — |
+| 2 | Video CRUD + folder assignment | Migrations |
+| 3 | B2 signed playback URLs | Migrations |
+| 4 | Watch page + visibility + `proxy.ts` | Step 3 |
+| 5 | Share link UX | Step 4 |
+| 6 | Comments + notification polish | Step 4 |
+
+---
+
+## Remaining — desktop & API (out of web-app scope)
+
+These require the Electron app and are not part of the web dashboard work above.
+
+| Task | Notes |
+|------|-------|
+| **Desktop app** | Electron scaffold, screen/webcam capture, screenshots |
+| **Chunked upload during recording** | `MediaRecorder` timeslice → presigned PUT → segment registration while capture runs |
+| **API routes** | `POST /api/videos`, `/upload-url`, `/segments`, `PATCH /api/videos/:id` |
+| **Desktop auth** | Clerk session token as bearer on API routes |
+| **B2 upload API** | Presigned PUT URL route + segment registration (desktop client) |
+
+---
 
 ## Auth — web done vs. remaining
 
@@ -51,51 +122,14 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - `apps/web/proxy.ts` — correct file for **Next.js 16** (replaces old `middleware.ts`); protects `/dashboard/**` and `/api/**`
 - `currentUser()` checks in folder server actions
 - `UserButton` in dashboard
+- Post-login redirect to `/dashboard`
 
-**Can do now (no desktop needed):**
-1. ~~Redirect to `/dashboard` after sign-in/sign-up (env vars)~~ — done
-2. ~~Build `/dashboard/settings`~~ — done (`UserProfile` at `/dashboard/settings`)
-3. ~~Add `"use server"` to `video.ts`~~ — done
-4. Plan public routes in `proxy.ts` for future `/watch/:id` (PUBLIC videos)
-
-**Later (needs other features):**
-- Desktop Clerk session + bearer tokens on API routes
+**Remaining (web):**
+- Public routes in `proxy.ts` for `/watch/:id` (and later `/r/[slug]`)
 - Visibility checks on watch page (`PUBLIC` / `AUTHENTICATED` / `PRIVATE`)
 
----
-
-## Not started (the core product)
-
-These are the Loom-style features described in [architecture.md](./architecture.md). Nothing here blocks folder work — folders are done; the recording → upload → watch loop is what's left.
-
-- **Desktop app** — Electron scaffold, screen/webcam capture, screenshots.
-- **Chunked upload during recording** — `MediaRecorder` timeslice → presigned PUT → segment registration while capture runs.
-- **API routes** — `POST /api/videos`, `/upload-url`, `/segments`, `PATCH /api/videos/:id`.
-- **Progressive playback** — watch page with MSE/HLS; playable while `status` is `RECORDING`.
-- **Share links** — copy-link UX, public/authenticated routes, short slugs.
-- **Social** — comments and notifications UI (schema exists).
-- **Infra** — CI/CD, tests, desktop packaging, production B2 config.
-
----
-
-## Suggested build order
-
-Ordered by dependency — each step unlocks the next.
-
-| # | Task | Rationale |
-|---|------|-----------|
-| 1 | **Database** — generate + run Drizzle migrations | Everything else assumes tables exist in Postgres |
-| 2 | ~~**Auth polish** — post-login redirect to `/dashboard`~~ | Done |
-| 3 | **Video metadata CRUD** — create/edit/delete actions + UI, assign `folderId` | Completes the dashboard before recording exists |
-| 4 | **Upload API** — presigned B2 URL route + segment registration | Backend piece the desktop app needs |
-| 5 | **Watch page** — progressive playback + visibility checks | Add `/watch/:id` to public routes in `proxy.ts` where appropriate |
-| 6 | **Share links** — copy-link UX, public/authenticated access | Depends on watch page |
-| 7 | **Desktop app** — Electron capture + chunked upload client | Needs API from step 4; desktop Clerk auth |
-| 8 | **Polish** — comments, notifications (mark read, real-time) | UX after core loop works |
-
-**Removed from old list:** "wire `CreateVideo`" — that component doesn't exist in the repo. Step 3 replaces it with building video CRUD from scratch.
-
-**Moved up:** Video metadata CRUD before upload API — you can build and test folder + video organization in the dashboard without B2 integration.
+**Desktop only (later):**
+- Bearer token verification on API routes
 
 ---
 
@@ -104,6 +138,7 @@ Ordered by dependency — each step unlocks the next.
 | Path | State |
 |------|-------|
 | `apps/web/db/schema.ts` | Complete schema |
+| `apps/web/drizzle/` | Empty — migrations not generated |
 | `apps/web/server-actions/folder.ts` | Full CRUD + `getFolderById` |
 | `apps/web/server-actions/video.ts` | List only |
 | `apps/web/server-actions/notification.ts` | List only |
@@ -111,7 +146,8 @@ Ordered by dependency — each step unlocks the next.
 | `apps/web/proxy.ts` | Clerk route protection (Next.js 16 — correct filename) |
 | `apps/web/app/dashboard/_components/` | Folder UI (card, row, actions, view toggle, breadcrumb), video row, dashboard sections + sidebar |
 | `apps/web/app/dashboard/folders/page.tsx` | Root folders list |
-| `apps/web/app/dashboard/folder/[id]/page.tsx` | Folder detail (subfolders, videos, timestamps) |
+| `apps/web/app/dashboard/folder/[id]/page.tsx` | Folder detail (subfolders, videos read-only) |
 | `apps/web/app/dashboard/videos/page.tsx` | List only |
 | `apps/web/app/dashboard/notifications/page.tsx` | List + empty state |
 | `apps/web/app/dashboard/page.tsx` | Recent folders + videos with grid/list toggle |
+| `apps/web/app/watch/` | Not started |
