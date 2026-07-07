@@ -9,14 +9,17 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
-        <main className="h-full w-full">
-          <SidebarTrigger />
-          <div className="fixed top-3 right-6">
+        <main className="flex min-h-svh w-full flex-col">
+          <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+            <SidebarTrigger className="cursor-pointer" />
+
             <UserButton />
-          </div>
-          {children}
+          </header>
+
+          <div className="flex-1">{children}</div>
+
+          <Toaster />
         </main>
-        <Toaster />
       </SidebarProvider>
     </TooltipProvider>
   );

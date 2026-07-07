@@ -1,15 +1,46 @@
-const DashboardPage = () => {
-  return (
-    <div className="h-full w-full flex justify-center pl-20 py-10 flex-col">
-      <div className="flex-col space-y-5 mb-10">
-        <p>Recent Videos</p>
-        <div className="flex justify-between pr-40"></div>
-      </div>
+import { DashboardSections } from "@/app/dashboard/_components/dashboard-sections";
 
-      <div className="flex-col space-y-5 mt-10">
-        <p>Recent Folders</p>
-        <div className="flex justify-between pr-40"></div>
-      </div>
+import { getAllUserFolders } from "@/server-actions/folder";
+import { getAllUserVideos } from "@/server-actions/video";
+
+const DashboardPage = async () => {
+  const [foldersResponse, videosResponse] = await Promise.all([
+    getAllUserFolders(),
+    getAllUserVideos(),
+  ]);
+
+  if (!foldersResponse.success || !foldersResponse.folders) {
+    return <>{foldersResponse.message}</>;
+  }
+
+  if (!videosResponse.success || !videosResponse.videos) {
+    return <>{videosResponse.message}</>;
+  }
+
+  const { folders } = foldersResponse;
+  const { videos } = videosResponse;
+
+  const recentFolders = folders
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, 4);
+
+  const recentVideos = videos
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, 4);
+
+  return (
+    <div className="px-15 pb-15 pt-10">
+      <DashboardSections
+        recentFolders={recentFolders}
+        allFolders={folders}
+        recentVideos={recentVideos}
+      />
     </div>
   );
 };
