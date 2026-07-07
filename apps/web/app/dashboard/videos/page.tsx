@@ -4,7 +4,7 @@ import { getAllUserVideos } from "@/server-actions/video";
 const VideosPage = async () => {
   const { success, videos, message } = await getAllUserVideos();
   return (
-    <div className="h-full w-full flex justify-center pl-20 py-15 flex-col">
+    <div className="h-full w-full flex justify-center pl-20 pb-15 pt-10 flex-col">
       <div className="flex-col space-y-10 mb-10">
         <p className="font-bold text-2xl">Videos</p>
         <div className="flex justify-between pr-40">

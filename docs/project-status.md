@@ -40,11 +40,10 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Gap | Why it matters |
 |-----|----------------|
 | Post-login redirect goes to `/` not `/dashboard` | Users land on marketing page after sign-in instead of the app |
-| No `/dashboard/settings` page | Sidebar link 404s; no account/profile management in-app |
 | `video.ts` missing `"use server"` | Inconsistent with `folder.ts`; should be fixed when adding video CRUD |
 | No video create/edit/delete | Only list exists; no UI or server actions for mutations |
 | Videos not assignable to folders | `folderId` in schema but not used in app code |
-| `/dashboard/settings`, `/dashboard/notifications` | Linked in sidebar but pages missing |
+| `/dashboard/settings`, `/dashboard/notifications` | Notifications page still missing |
 | No Drizzle migrations committed | Schema defined but `drizzle/` is empty |
 | Duplicate `getAllUserFolders` in `video.ts` | Dead code; folders logic lives in `folder.ts` |
 
@@ -59,7 +58,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 
 **Can do now (no desktop needed):**
 1. Redirect to `/dashboard` after sign-in/sign-up (env vars)
-2. Build `/dashboard/settings` with Clerk account UI (`<UserProfile />` or similar)
+2. ~~Build `/dashboard/settings`~~ — done (`UserProfile` at `/dashboard/settings`)
 3. Add `"use server"` to `video.ts` and use `currentUser()` consistently when video CRUD is built
 4. Plan public routes in `proxy.ts` for future `/watch/:id` (PUBLIC videos)
 
@@ -90,7 +89,7 @@ Ordered by dependency — each step unlocks the next.
 | # | Task | Rationale |
 |---|------|-----------|
 | 1 | **Database** — generate + run Drizzle migrations | Everything else assumes tables exist in Postgres |
-| 2 | **Auth polish** — post-login redirect to `/dashboard`, settings page | Small UX wins; web auth is already wired via `proxy.ts` |
+| 2 | **Auth polish** — post-login redirect to `/dashboard` | Small UX win; settings page done |
 | 3 | **Video metadata CRUD** — create/edit/delete actions + UI, assign `folderId` | Completes the dashboard before recording exists |
 | 4 | **Upload API** — presigned B2 URL route + segment registration | Backend piece the desktop app needs |
 | 5 | **Watch page** — progressive playback + visibility checks | Add `/watch/:id` to public routes in `proxy.ts` where appropriate |

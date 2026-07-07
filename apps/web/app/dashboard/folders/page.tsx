@@ -13,7 +13,7 @@ const FoldersPage = async () => {
   const rootFolders = folders.filter((folder) => !folder.parentId);
 
   return (
-    <div className="p-15 space-y-10">
+    <div className="px-15 pb-15 pt-10 space-y-10">
       <div className="flex justify-between">
         <p className="font-bold text-2xl">Folders</p>
 

@@ -129,8 +129,9 @@ The single backend for browser and desktop.
 
 | Area | Routes / behavior |
 |------|-------------------|
-| Sidebar | Icon-collapsible nav; active route highlighted (Folders includes `/dashboard/folder/:id`) |
+| Sidebar | Icon-collapsible nav; active route highlighted; links to Dashboard, Videos, Folders, Settings, Notifications |
 | Folders | `/dashboard/folders` (root list), `/dashboard/folder/:id` (detail); grid or list view; nested CRUD with breadcrumbs |
+| Settings | `/dashboard/settings` — Clerk `UserProfile` (account, security) |
 | Videos | `/dashboard/videos` — list only; no create/edit yet |
 | Home | `/dashboard` — placeholder (recent activity not wired) |
 
