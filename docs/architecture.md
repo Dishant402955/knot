@@ -125,6 +125,17 @@ The single backend for browser and desktop.
 - **Server Actions** handle dashboard mutations (folders, video metadata).
 - **API Routes** serve the desktop app (upload URLs, segment registration, status).
 
+### Dashboard (implemented today)
+
+| Area | Routes / behavior |
+|------|-------------------|
+| Sidebar | Icon-collapsible nav; active route highlighted (Folders includes `/dashboard/folder/:id`) |
+| Folders | `/dashboard/folders` (root list), `/dashboard/folder/:id` (detail); grid or list view; nested CRUD with breadcrumbs |
+| Videos | `/dashboard/videos` — list only; no create/edit yet |
+| Home | `/dashboard` — placeholder (recent activity not wired) |
+
+Folder mutations enforce same-level unique names, block circular parent moves, and recursively delete subfolders. Videos in a deleted folder get `folderId` set to null (DB `onDelete: set null`).
+
 ### Progressive playback (watch page)
 
 Route: `/watch/[videoId]` (or short link `/r/[slug]`).
@@ -182,7 +193,7 @@ Credentials (`B2_KEY_ID`, `B2_APPLICATION_KEY`) are **server-only**. Clients nev
 
 Single identity provider for web and desktop.
 
-- **Web:** `ClerkProvider` + `clerkMiddleware` (currently in `proxy.ts`, must be renamed to `middleware.ts` to run).
+- **Web:** `ClerkProvider` + `clerkMiddleware` in `proxy.ts` (Next.js 16 network boundary — replaces the old `middleware.ts` convention).
 - **Desktop:** Clerk session token sent as a bearer token; verified in API routes.
 - **Server:** `currentUser()` guard on every protected action.
 
@@ -203,7 +214,7 @@ Default on create: `PRIVATE`. Visibility is checked **before** any signed B2 URL
 
 | Layer | Mechanism |
 |-------|-----------|
-| Route protection | Clerk middleware on `/dashboard/*` and `/api/*` |
+| Route protection | `clerkMiddleware` in `proxy.ts` on `/dashboard/*` and `/api/*` |
 | Mutations | `currentUser()` guard; verify `video.userId === user.id` |
 | Uploads | Short-lived presigned PUT URLs scoped to one key |
 | Reads | Signed GET URLs issued only after visibility checks |
