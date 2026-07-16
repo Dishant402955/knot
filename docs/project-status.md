@@ -17,7 +17,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Share links | Not started |
 | Comments & notifications | Partial (list UI only) |
 | API routes (desktop) | Not started |
-| Desktop (Electron) app | Not started |
+| Desktop (Electron) app | Phase A done (local capture) |
 | Infra (CI, tests) | Not started |
 
 ---
@@ -33,7 +33,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - **Folders** — full CRUD, nested folders, duplicate-name validation, root list page, detail page (`/dashboard/folder/:id`), breadcrumbs, grid/list view toggle, folder cards + rows, 3-dot actions menu, real video counts, recursive delete.
 - **Videos (metadata)** — `getAllUserVideos`, videos list page (read-only), video row component for list view.
 - **Notifications** — `getAllUserNotifications`, list page with empty state (read-only).
-- **B2 (prototype)** — standalone upload test script (`server-actions/b2.ts`).
+- **Desktop (Phase A)** — Electron app in `apps/desktop`: source picker (screen/window/region), mic + system audio, webcam overlay (drag/resize, circle/square/rectangle), canvas compositing, 5s WebM chunks saved locally, countdown, pause/resume/stop, screenshots, tray + global shortcuts, floating recording indicator.
 
 ---
 
@@ -100,17 +100,18 @@ Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url
 
 ---
 
-## Remaining — desktop & API (out of web-app scope)
+## Remaining — desktop & API
 
-These require the Electron app and are not part of the web dashboard work above.
+Phase A (local capture shell) is done. Still required for the full Knot loop:
 
 | Task | Notes |
 |------|-------|
-| **Desktop app** | Electron scaffold, screen/webcam capture, screenshots |
-| **Chunked upload during recording** | `MediaRecorder` timeslice → presigned PUT → segment registration while capture runs |
+| **Desktop auth** | Clerk session token stored in OS keychain |
 | **API routes** | `POST /api/videos`, `/upload-url`, `/segments`, `PATCH /api/videos/:id` |
-| **Desktop auth** | Clerk session token as bearer on API routes |
-| **B2 upload API** | Presigned PUT URL route + segment registration (desktop client) |
+| **Chunked upload during recording** | Presigned PUT → B2 → register segment while capturing |
+| **B2 upload API** | Server-side presigned URL generation |
+| **Share link on record** | Show/copy link once chunk 0 uploads |
+| **Packaging** | Windows/macOS installers, auto-update |
 
 ---
 
@@ -150,4 +151,5 @@ These require the Electron app and are not part of the web dashboard work above.
 | `apps/web/app/dashboard/videos/page.tsx` | List only |
 | `apps/web/app/dashboard/notifications/page.tsx` | List + empty state |
 | `apps/web/app/dashboard/page.tsx` | Recent folders + videos with grid/list toggle |
+| `apps/desktop/` | Phase A recorder (local chunks, tray, overlay) |
 | `apps/web/app/watch/` | Not started |

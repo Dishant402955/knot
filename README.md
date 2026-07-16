@@ -97,12 +97,22 @@ The web app runs at [http://localhost:3000](http://localhost:3000).
 ```
 knot/
 ├── apps/
-│   └── web/          # Next.js web app (dashboard + API)
+│   ├── web/          # Next.js web app (dashboard + API)
+│   └── desktop/      # Electron recorder (local capture + chunks)
 ├── packages/         # Shared ESLint & TypeScript configs
 └── docs/             # Architecture & design documentation
 ```
 
-> **Note:** The Electron desktop app (`apps/desktop/`) is planned but not yet in the repository. See [Project Status](./docs/project-status.md).
+```bash
+# Web
+pnpm --filter web dev
+
+# Desktop recorder
+pnpm --filter desktop dev
+# or: pnpm dev:desktop
+```
+
+> **Note:** Desktop Phase A captures locally (5s WebM chunks on disk). Cloud upload + Clerk desktop auth are not wired yet. See [Project Status](./docs/project-status.md).
 
 ## License
 

@@ -42,7 +42,7 @@ flowchart TB
 knot/
 ├── apps/
 │   ├── web/          # Next.js — marketing, dashboard, API (the only app today)
-│   └── desktop/      # Electron — capture + chunked upload (planned)
+│   └── desktop/      # Electron — capture + local chunks (Phase A); upload planned
 ├── packages/         # Shared ESLint & TypeScript configs
 └── docs/             # This documentation
 ```
@@ -54,7 +54,7 @@ Managed with **pnpm workspaces** + **Turborepo**.
 | Layer | Choice |
 |-------|--------|
 | Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui |
-| Desktop | Electron (planned) |
+| Desktop | Electron (`apps/desktop`, Phase A) |
 | Auth | Clerk |
 | Database | PostgreSQL via Drizzle ORM (Neon driver) |
 | Storage | Backblaze B2 (S3-compatible API) |
@@ -154,21 +154,25 @@ Route: `/watch/[videoId]` (or short link `/r/[slug]`).
 
 ---
 
-## 4. Desktop App (`apps/desktop`) — planned
+## 4. Desktop App (`apps/desktop`)
 
-The primary capture surface. Not yet in the repo.
+Primary capture surface. **Phase A (local)** is implemented; cloud upload + auth come next.
 
-| Module | Responsibility |
-|--------|----------------|
-| Tray | Global shortcut, menu (record, screenshot, open dashboard) |
-| Capture | `desktopCapturer` + `MediaRecorder` with timed chunks; optional webcam overlay |
-| Upload | Fetch presigned URL → PUT each chunk to B2 → register segment, **during recording** |
-| Auth | Clerk session, stored in OS keychain, sent as `Authorization: Bearer <token>` |
+| Module | Status | Responsibility |
+|--------|--------|----------------|
+| Tray | Done | Global shortcut hooks, menu (record, screenshot, open dashboard, quit) |
+| Capture | Done | `desktopCapturer` + `MediaRecorder` (5s WebM chunks); screen / window / region |
+| Webcam overlay | Done | Always-on-top preview; drag/resize; shapes circle / square / rectangle; composited into recording |
+| Audio | Done | Mic + optional system/desktop audio |
+| Controls | Done | Countdown, start / pause / resume / stop, screenshot, floating indicator |
+| Upload | Not started | Presigned PUT per chunk → B2 → register segment during recording |
+| Auth | Not started | Clerk session in OS keychain, `Authorization: Bearer <token>` |
 
-**Capture notes:** VP8/VP9 WebM output; system + mic audio via `getUserMedia`; webcam overlay via canvas compositing (shapes: circle / square / rect). An optional local buffer of recent chunks allows a quick self-preview — a recorder convenience, not the main playback path.
+**Capture notes:** VP8/VP9 WebM output; webcam overlay via canvas compositing. Chunks are written under Electron `userData/recordings/<sessionId>/`.
 
-**Capture modes:** full screen, window, region, and single-frame screenshot (PNG/JPEG to B2).
+**Capture modes:** full screen, window, region, and single-frame screenshot (PNG).
 
+Run: `pnpm --filter desktop dev` (see `apps/desktop/README.md`).
 ---
 
 ## 5. Storage (Backblaze B2)
