@@ -42,7 +42,7 @@ flowchart TB
 knot/
 ├── apps/
 │   ├── web/          # Next.js — marketing, dashboard, API (the only app today)
-│   └── desktop/      # Electron — capture + local chunks (Phase A); upload planned
+│   └── desktop/      # Electron — capture + Clerk (Phase A+); upload planned
 ├── packages/         # Shared ESLint & TypeScript configs
 └── docs/             # This documentation
 ```
@@ -54,7 +54,7 @@ Managed with **pnpm workspaces** + **Turborepo**.
 | Layer | Choice |
 |-------|--------|
 | Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui |
-| Desktop | Electron (`apps/desktop`, Phase A) |
+| Desktop | Electron (`apps/desktop`, Phase A+) |
 | Auth | Clerk |
 | Database | PostgreSQL via Drizzle ORM (Neon driver) |
 | Storage | Backblaze B2 (S3-compatible API) |
@@ -156,21 +156,23 @@ Route: `/watch/[videoId]` (or short link `/r/[slug]`).
 
 ## 4. Desktop App (`apps/desktop`)
 
-Primary capture surface. **Phase A (local)** is implemented; cloud upload + auth come next.
+Primary capture surface. **Phase A+ (local capture + Clerk)** is implemented; cloud upload comes next.
 
 | Module | Status | Responsibility |
 |--------|--------|----------------|
-| Tray | Done | Global shortcut hooks, menu (record, screenshot, open dashboard, quit) |
-| Capture | Done | `desktopCapturer` + `MediaRecorder` (5s WebM chunks); screen / window / region |
-| Webcam overlay | Done | Always-on-top preview; drag/resize; shapes circle / square / rectangle; composited into recording |
+| Tray / indicator | Done | Floating bar ready before countdown; system tray menu; global shortcuts |
+| Capture | Done | Independently playable ~5s WebM chunks via MediaRecorder rotation; screen / window / region |
+| Webcam overlay | Done | Always-on-top preview; drag/resize; shapes circle / square / rectangle; composited for window/region |
 | Audio | Done | Mic + optional system/desktop audio |
-| Controls | Done | Countdown, start / pause / resume / stop, screenshot, floating indicator |
+| Controls | Done | Countdown (after indicator ready), prepare-during-countdown, instant commit at 0, pause / resume / stop, screenshot |
+| Auth | Done | `@clerk/electron`, OS keychain tokens, same Clerk app as web, `knot://app/` OAuth |
 | Upload | Not started | Presigned PUT per chunk → B2 → register segment during recording |
-| Auth | Not started | Clerk session in OS keychain, `Authorization: Bearer <token>` |
 
-**Capture notes:** VP8/VP9 WebM output; webcam overlay via canvas compositing. Chunks are written under Electron `userData/recordings/<sessionId>/`.
+**Capture notes:** VP8/VP9 WebM; each `chunk-NNNN.webm` is a complete file (not timeslice fragments). Written under Electron `userData/recordings/<sessionId>/`.
 
 **Capture modes:** full screen, window, region, and single-frame screenshot (PNG).
+
+**Record sequence:** indicator ready → countdown (capture prepares in parallel) → encode starts at 0.
 
 Run: `pnpm --filter desktop dev` (see `apps/desktop/README.md`).
 ---

@@ -11,7 +11,7 @@ import {
   Tray,
 } from "electron";
 import { join } from "path";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { randomUUID } from "crypto";
 
@@ -32,23 +32,20 @@ import { resolveRecordingsPath, resolveSessionDir } from "../shared/paths";
 import { normalizeWebcamBounds } from "../shared/webcam-utils";
 import {
   applyClerkContentSecurityPolicy,
+  applyClerkNativeHeaderFix,
   cleanupClerkBridge,
   controlWindowUrl,
   ensureSingleInstance,
   initClerkBridge,
   knotApiBaseUrl,
   knotDashboardUrl,
+  overlayWindowUrl,
   registerKnotProtocol,
 } from "./clerk";
 
-const isDev = !app.isPackaged;
-
 const gotSingleInstanceLock = ensureSingleInstance(() => {
   const focus = () => {
-    const win = ensureControlWindow();
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
+    unparkControlWindow();
   };
 
   if (app.isReady()) {
@@ -95,6 +92,57 @@ let webcamBounds: WebcamBounds = normalizeWebcamBounds({
 let isQuitting = false;
 let quitAfterStop = false;
 let regionPickerActive = false;
+let controlParkBounds: Electron.Rectangle | null = null;
+
+let countdownResolve: ((value: { completed: boolean }) => void) | null = null;
+let countdownSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+let indicatorReadyResolve: (() => void) | null = null;
+/** Set only after showIndicator completes its paint handshake. */
+let indicatorFullyReady = false;
+
+const clearCountdownWait = (completed: boolean) => {
+  if (countdownSafetyTimer) {
+    clearTimeout(countdownSafetyTimer);
+    countdownSafetyTimer = null;
+  }
+  if (countdownResolve) {
+    const resolve = countdownResolve;
+    countdownResolve = null;
+    resolve({ completed });
+  }
+};
+
+const waitForWindowReady = (win: BrowserWindow) =>
+  new Promise<void>((resolve) => {
+    const finish = () => {
+      // Let the first paint land before we treat the overlay as ready.
+      setTimeout(resolve, 180);
+    };
+
+    if (win.webContents.isLoading()) {
+      win.webContents.once("did-finish-load", finish);
+    } else {
+      finish();
+    }
+  });
+
+/** Wait until the indicator renderer reports it has painted. */
+const waitForIndicatorReady = (timeoutMs = 4000) =>
+  new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      if (indicatorReadyResolve === done) {
+        indicatorReadyResolve = null;
+      }
+      clearTimeout(timer);
+      resolve();
+    };
+
+    const timer = setTimeout(done, timeoutMs);
+    indicatorReadyResolve = done;
+  });
 
 const isControlSender = (event: Electron.IpcMainInvokeEvent) =>
   Boolean(
@@ -199,6 +247,46 @@ const setCaptureThrottling = (enabled: boolean) => {
   webcamWindow?.webContents.setBackgroundThrottling(enabled);
 };
 
+/** Park control off-screen instead of hide() — recorder lives in this renderer. */
+const parkControlWindow = () => {
+  const win = controlWindow;
+  if (!win || win.isDestroyed()) return;
+
+  win.webContents.setBackgroundThrottling(false);
+
+  if (!controlParkBounds) {
+    controlParkBounds = win.getBounds();
+  }
+
+  win.setOpacity(0);
+  win.setSkipTaskbar(true);
+  win.setBounds({
+    x: -32000,
+    y: -32000,
+    width: Math.max(controlParkBounds.width, 900),
+    height: Math.max(controlParkBounds.height, 600),
+  });
+  if (!win.isVisible()) {
+    win.showInactive();
+  }
+};
+
+const unparkControlWindow = () => {
+  const win = ensureControlWindow();
+  // Idle → allow throttling; active session → keep awake.
+  win.webContents.setBackgroundThrottling(recordingState === "idle");
+
+  if (controlParkBounds) {
+    win.setBounds(controlParkBounds);
+    controlParkBounds = null;
+  }
+
+  win.setOpacity(1);
+  win.setSkipTaskbar(false);
+  win.show();
+  win.focus();
+};
+
 const clearStatusTick = () => {
   if (statusTick) {
     clearInterval(statusTick);
@@ -226,26 +314,14 @@ const computeElapsedMs = () => {
 
 const recordingsRoot = () => join(app.getPath("userData"), "recordings");
 
-const rendererUrl = (windowName: string) => {
-  if (isDev && process.env["ELECTRON_RENDERER_URL"]) {
-    return `${process.env["ELECTRON_RENDERER_URL"]}?window=${windowName}`;
-  }
-
-  return `file://${join(__dirname, "../renderer/index.html")}?window=${windowName}`;
-};
+const rendererUrl = (windowName: string) => overlayWindowUrl(windowName);
 
 const loadControlWindow = (win: BrowserWindow) => {
   void win.loadURL(controlWindowUrl());
 };
 
 const loadWindow = (win: BrowserWindow, windowName: string) => {
-  if (isDev && process.env["ELECTRON_RENDERER_URL"]) {
-    void win.loadURL(rendererUrl(windowName));
-  } else {
-    void win.loadFile(join(__dirname, "../renderer/index.html"), {
-      query: { window: windowName },
-    });
-  }
+  void win.loadURL(rendererUrl(windowName));
 };
 
 const createTrayIcon = () => {
@@ -312,8 +388,13 @@ const setState = (state: RecordingState) => {
     setCaptureThrottling(true);
   }
 
-  if (state === "recording" || state === "paused") {
+  // Keep the control renderer alive during countdown + capture. The recorder
+  // lives in that window — hiding it freezes requestAnimationFrame.
+  if (state === "countdown" || state === "recording" || state === "paused") {
     setCaptureThrottling(false);
+  }
+
+  if (state === "recording" || state === "paused") {
     startStatusTick();
   }
 
@@ -329,10 +410,10 @@ const ensureControlWindow = () => {
   }
 
   controlWindow = new BrowserWindow({
-    width: 1080,
-    height: 820,
+    width: 1100,
+    height: 740,
     minWidth: 900,
-    minHeight: 680,
+    minHeight: 600,
     title: "Knot",
     show: false,
     backgroundColor: "#05070a",
@@ -472,6 +553,8 @@ const ensureIndicatorWindow = () => {
 
   indicatorWindow.setAlwaysOnTop(true, "screen-saver");
   indicatorWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // Keep the bar out of the screen recording itself.
+  indicatorWindow.setContentProtection(true);
   loadWindow(indicatorWindow, "indicator");
 
   indicatorWindow.on("closed", () => {
@@ -511,6 +594,8 @@ const ensureCountdownWindow = () => {
 
   countdownWindow.setAlwaysOnTop(true, "screen-saver");
   countdownWindow.setIgnoreMouseEvents(true);
+  // Keep numbers out of the screen capture while prepare() runs during countdown.
+  countdownWindow.setContentProtection(true);
   loadWindow(countdownWindow, "countdown");
 
   countdownWindow.on("closed", () => {
@@ -560,17 +645,30 @@ const ensureRegionWindow = () => {
 const updateTrayMenu = () => {
   if (!tray) return;
 
-  const isActive = recordingState === "recording" || recordingState === "paused";
+  const isCapturing = recordingState === "recording" || recordingState === "paused";
+  const isCountdown = recordingState === "countdown";
+  const isSession = isCapturing || isCountdown;
 
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: isActive ? "Stop Recording" : "Start Recording",
+      label: isCountdown
+        ? "Cancel Countdown"
+        : isCapturing
+          ? "Stop Recording"
+          : "Start Recording",
       click: () =>
-        broadcast(IPC.trayAction, (isActive ? "stop-recording" : "start-recording") as ControlAction),
+        broadcast(
+          IPC.trayAction,
+          (isCountdown
+            ? "cancel-session"
+            : isCapturing
+              ? "stop-recording"
+              : "start-recording") as ControlAction,
+        ),
     },
     {
       label: recordingState === "paused" ? "Resume" : "Pause",
-      enabled: recordingState === "recording" || recordingState === "paused",
+      enabled: isCapturing,
       click: () =>
         broadcast(
           IPC.trayAction,
@@ -579,15 +677,14 @@ const updateTrayMenu = () => {
     },
     {
       label: "Take Screenshot",
+      enabled: !isSession,
       click: () => broadcast(IPC.trayAction, "take-screenshot" as ControlAction),
     },
     { type: "separator" },
     {
       label: "Show Recorder",
       click: () => {
-        const win = ensureControlWindow();
-        win.show();
-        win.focus();
+        unparkControlWindow();
       },
     },
     {
@@ -615,16 +712,16 @@ const updateTrayMenu = () => {
       ? "Knot — Recording"
       : recordingState === "paused"
         ? "Knot — Paused"
-        : "Knot Recorder",
+        : recordingState === "countdown"
+          ? "Knot — Starting…"
+          : "Knot Recorder",
   );
 };
 
 const createTray = () => {
   tray = new Tray(createTrayIcon());
   tray.on("double-click", () => {
-    const win = ensureControlWindow();
-    win.show();
-    win.focus();
+    unparkControlWindow();
   });
   updateTrayMenu();
 };
@@ -634,13 +731,16 @@ const registerShortcuts = () => {
 
   globalShortcut.register("CommandOrControl+Shift+R", () => {
     const action: ControlAction =
-      recordingState === "recording" || recordingState === "paused"
-        ? "stop-recording"
-        : "start-recording";
+      recordingState === "countdown"
+        ? "cancel-session"
+        : recordingState === "recording" || recordingState === "paused"
+          ? "stop-recording"
+          : "start-recording";
     broadcast(IPC.shortcutAction, action);
   });
 
   globalShortcut.register("CommandOrControl+Shift+S", () => {
+    if (recordingState !== "idle") return;
     broadcast(IPC.shortcutAction, "take-screenshot" as ControlAction);
   });
 
@@ -718,15 +818,57 @@ const registerIpc = () => {
     pauseStartedAt = null;
     totalPausedMs = 0;
     chunkCount = 0;
+    outputDir = null;
     setState("idle");
     return result;
+  });
+
+  ipcMain.handle(IPC.discardSession, async (event) => {
+    if (!isControlSender(event)) {
+      throw new Error("Only the control window can discard a session");
+    }
+
+    const dir = outputDir;
+
+    sessionId = null;
+    startedAt = null;
+    pauseStartedAt = null;
+    totalPausedMs = 0;
+    chunkCount = 0;
+    outputDir = null;
+    setState("idle");
+
+    if (dir && existsSync(dir)) {
+      try {
+        const files = await readdir(dir);
+        const hasMedia = files.some(
+          (name) => name.startsWith("chunk-") && name.endsWith(".webm"),
+        );
+        if (!hasMedia) {
+          await rm(dir, { recursive: true, force: true });
+        } else {
+          await writeSessionManifest(dir, {
+            state: "abandoned",
+            endedAt: Date.now(),
+          });
+        }
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
+
+    return { discarded: true };
   });
 
   ipcMain.handle(
     IPC.saveChunk,
     async (
       event,
-      payload: { sessionId: string; index: number; buffer: ArrayBuffer },
+      payload: {
+        sessionId: string;
+        index: number;
+        buffer: ArrayBuffer;
+      },
     ) => {
       if (!isControlSender(event)) {
         throw new Error("Only the control window can save chunks");
@@ -746,13 +888,15 @@ const registerIpc = () => {
       }
 
       await mkdir(dir, { recursive: true });
-      const filePath = join(dir, `chunk-${String(payload.index).padStart(4, "0")}.webm`);
       const data = Buffer.from(new Uint8Array(payload.buffer));
 
       if (data.byteLength === 0) {
         throw new Error("Refusing to write empty chunk");
       }
 
+      // Each blob is a complete MediaRecorder segment (own EBML header) —
+      // so chunk-NNNN.webm is independently playable.
+      const filePath = join(dir, `chunk-${String(payload.index).padStart(4, "0")}.webm`);
       await writeFile(filePath, data);
       chunkCount = Math.max(chunkCount, payload.index + 1);
       await writeSessionManifest(dir, {
@@ -760,6 +904,7 @@ const registerIpc = () => {
         state: "recording",
         lastChunkIndex: payload.index,
         lastChunkBytes: data.byteLength,
+        note: "Each chunk-*.webm is a complete, independently playable WebM file.",
       });
       broadcast(IPC.updateIndicator, getStatusPayload());
       return { path: filePath, size: data.byteLength };
@@ -796,13 +941,11 @@ const registerIpc = () => {
   });
 
   ipcMain.handle(IPC.showControl, () => {
-    const win = ensureControlWindow();
-    win.show();
-    win.focus();
+    unparkControlWindow();
   });
 
   ipcMain.handle(IPC.hideControl, () => {
-    controlWindow?.hide();
+    parkControlWindow();
   });
 
   ipcMain.handle(IPC.showWebcam, (_event, shape?: WebcamShape) => {
@@ -812,7 +955,11 @@ const registerIpc = () => {
   });
 
   ipcMain.handle(IPC.hideWebcam, () => {
-    webcamWindow?.hide();
+    // Destroy (don't just hide) so the renderer unmounts and camera tracks stop.
+    if (webcamWindow && !webcamWindow.isDestroyed()) {
+      webcamWindow.destroy();
+    }
+    webcamWindow = null;
   });
 
   ipcMain.handle(IPC.updateWebcamBounds, (_event, bounds: Partial<WebcamBounds>) => {
@@ -821,30 +968,6 @@ const registerIpc = () => {
   });
 
   ipcMain.handle(IPC.getWebcamBounds, () => webcamBounds);
-
-  ipcMain.handle(IPC.getWebcamCaptureSourceId, async () => {
-    const win = webcamWindow;
-    if (!win || win.isDestroyed() || !win.isVisible()) {
-      return null;
-    }
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 150 + attempt * 100));
-
-      const sources = await desktopCapturer.getSources({
-        types: ["window"],
-        thumbnailSize: { width: 1, height: 1 },
-      });
-
-      const exact = sources.find((source) => source.name === WEBCAM_WINDOW_TITLE);
-      if (exact) return exact.id;
-
-      const partial = sources.find((source) => source.name.includes("Knot Webcam"));
-      if (partial) return partial.id;
-    }
-
-    return null;
-  });
 
   ipcMain.handle(
     IPC.getCaptureFrameOrigin,
@@ -905,25 +1028,110 @@ const registerIpc = () => {
     return webcamBounds;
   });
 
-  ipcMain.handle(IPC.showIndicator, () => {
+  ipcMain.handle(IPC.showIndicator, async () => {
+    indicatorFullyReady = false;
     const win = ensureIndicatorWindow();
-    win.show();
+    win.webContents.setBackgroundThrottling(false);
+    await waitForWindowReady(win);
+
+    // Arm the waiter BEFORE show/update so we never miss the paint signal.
+    const ready = waitForIndicatorReady(5000);
+
+    win.showInactive();
+    win.setAlwaysOnTop(true, "screen-saver");
+    win.moveTop();
     win.webContents.send(IPC.updateIndicator, getStatusPayload());
+
+    await ready;
+    // Extra compositor beat after the renderer says it's painted.
+    await new Promise((r) => setTimeout(r, 120));
+    indicatorFullyReady = true;
+  });
+
+  ipcMain.on(IPC.indicatorReady, () => {
+    indicatorReadyResolve?.();
+    indicatorReadyResolve = null;
   });
 
   ipcMain.handle(IPC.hideIndicator, () => {
+    indicatorFullyReady = false;
     indicatorWindow?.hide();
   });
 
-  ipcMain.handle(IPC.showCountdown, (_event, seconds: number) => {
+  ipcMain.handle(IPC.showCountdown, async (_event, seconds: number) => {
+    if (seconds <= 0) {
+      return { completed: true };
+    }
+
+    // Hard gate: center timer must not appear until the tray finished its handshake.
+    if (!indicatorFullyReady) {
+      console.warn("[knot] Countdown blocked until indicator is fully ready.");
+      indicatorFullyReady = false;
+      const ind = ensureIndicatorWindow();
+      ind.webContents.setBackgroundThrottling(false);
+      await waitForWindowReady(ind);
+      const ready = waitForIndicatorReady(5000);
+      ind.showInactive();
+      ind.setAlwaysOnTop(true, "screen-saver");
+      ind.moveTop();
+      ind.webContents.send(IPC.updateIndicator, getStatusPayload());
+      await ready;
+      await new Promise((r) => setTimeout(r, 120));
+      indicatorFullyReady = true;
+    }
+
     setState("countdown");
+    // Keep tray above the countdown overlay.
+    if (indicatorWindow && !indicatorWindow.isDestroyed()) {
+      indicatorWindow.setAlwaysOnTop(true, "screen-saver");
+      indicatorWindow.moveTop();
+    }
+
     const win = ensureCountdownWindow();
+    const display = screen.getPrimaryDisplay();
+    win.setBounds({
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: display.bounds.width,
+      height: display.bounds.height,
+    });
+    win.setAlwaysOnTop(true, "screen-saver");
+    await waitForWindowReady(win);
     win.show();
-    win.webContents.send(IPC.showCountdown, seconds);
+    // Tray stays on top of the countdown numbers.
+    if (indicatorWindow && !indicatorWindow.isDestroyed()) {
+      indicatorWindow.moveTop();
+    }
+
+    return new Promise<{ completed: boolean }>((resolve) => {
+      clearCountdownWait(false);
+      countdownResolve = resolve;
+
+      const send = () => win.webContents.send(IPC.showCountdown, seconds);
+      if (win.webContents.isLoading()) {
+        win.webContents.once("did-finish-load", send);
+      } else {
+        send();
+      }
+
+      countdownSafetyTimer = setTimeout(
+        () => {
+          countdownWindow?.hide();
+          clearCountdownWait(true);
+        },
+        (seconds + 3) * 1000,
+      );
+    });
   });
 
   ipcMain.handle(IPC.hideCountdown, () => {
     countdownWindow?.hide();
+    clearCountdownWait(false);
+  });
+
+  ipcMain.on(IPC.countdownFinished, () => {
+    countdownWindow?.hide();
+    clearCountdownWait(true);
   });
 
   ipcMain.handle(IPC.showRegionPicker, async (event) => {
@@ -1004,6 +1212,7 @@ app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) return;
 
   await registerKnotProtocol();
+  applyClerkNativeHeaderFix();
   applyClerkContentSecurityPolicy();
 
   if (!existsSync(recordingsRoot())) {
@@ -1014,9 +1223,12 @@ app.whenReady().then(async () => {
   createTray();
   registerShortcuts();
   ensureControlWindow();
+  // Preload overlay windows so the first record doesn't race load vs countdown.
+  ensureIndicatorWindow();
+  ensureCountdownWindow();
 
   app.on("activate", () => {
-    ensureControlWindow().show();
+    unparkControlWindow();
   });
 });
 

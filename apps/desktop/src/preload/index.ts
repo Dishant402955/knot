@@ -36,6 +36,8 @@ const api = {
 
   endSession: () => ipcRenderer.invoke(IPC.endSession),
 
+  discardSession: () => ipcRenderer.invoke(IPC.discardSession),
+
   saveChunk: (payload: { sessionId: string; index: number; buffer: ArrayBuffer }) =>
     ipcRenderer.invoke(IPC.saveChunk, payload) as Promise<{ path: string; size: number }>,
 
@@ -63,18 +65,21 @@ const api = {
   updateWebcamBounds: (bounds: Partial<WebcamBounds>) =>
     ipcRenderer.invoke(IPC.updateWebcamBounds, bounds) as Promise<WebcamBounds>,
   getWebcamBounds: () => ipcRenderer.invoke(IPC.getWebcamBounds) as Promise<WebcamBounds>,
-  getWebcamCaptureSourceId: () =>
-    ipcRenderer.invoke(IPC.getWebcamCaptureSourceId) as Promise<string | null>,
   setWebcamShape: (shape: WebcamShape) =>
     ipcRenderer.invoke(IPC.setWebcamShape, shape) as Promise<WebcamBounds>,
   setWebcamSize: (size: WebcamSize) =>
     ipcRenderer.invoke(IPC.setWebcamSize, size) as Promise<WebcamBounds>,
 
-  showIndicator: () => ipcRenderer.invoke(IPC.showIndicator),
+  showIndicator: () => ipcRenderer.invoke(IPC.showIndicator) as Promise<void>,
   hideIndicator: () => ipcRenderer.invoke(IPC.hideIndicator),
+  /** Indicator window calls this after it has painted and is visibly ready. */
+  notifyIndicatorReady: () => ipcRenderer.send(IPC.indicatorReady),
 
-  showCountdown: (seconds: number) => ipcRenderer.invoke(IPC.showCountdown, seconds),
+  /** Shows fullscreen countdown and resolves when it finishes (or is cancelled). */
+  runCountdown: (seconds: number) =>
+    ipcRenderer.invoke(IPC.showCountdown, seconds) as Promise<{ completed: boolean }>,
   hideCountdown: () => ipcRenderer.invoke(IPC.hideCountdown),
+  notifyCountdownFinished: () => ipcRenderer.send(IPC.countdownFinished),
 
   pickRegion: () => ipcRenderer.invoke(IPC.showRegionPicker) as Promise<RegionBounds | null>,
   submitRegion: (region: RegionBounds) => ipcRenderer.send(IPC.regionSelected, region),
@@ -141,6 +146,17 @@ const api = {
     const listener = (_: Electron.IpcRendererEvent, seconds: number) => handler(seconds);
     ipcRenderer.on(IPC.showCountdown, listener);
     return () => ipcRenderer.removeListener(IPC.showCountdown, listener);
+  },
+
+  onOAuthStatus: (handler: (payload: import("../shared/types").OAuthStatusPayload) => void) => {
+    const listener = (
+      _: Electron.IpcRendererEvent,
+      payload: import("../shared/types").OAuthStatusPayload,
+    ) => handler(payload);
+    ipcRenderer.on(IPC.oauthStatus, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.oauthStatus, listener);
+    };
   },
 };
 

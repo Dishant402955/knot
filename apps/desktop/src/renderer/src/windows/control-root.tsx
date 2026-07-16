@@ -15,8 +15,15 @@ const clerk = getRendererClerkEnv();
 
 const ALLOWED_REDIRECT_PROTOCOLS = ["knot:"];
 
-/** Fail open to offline recording if Clerk is slow/unreachable. */
-const CLERK_LOAD_TIMEOUT_MS = 8_000;
+/** Show a soft warning after this; do NOT auto-force offline. */
+const CLERK_SLOW_MS = 12_000;
+
+if (typeof window !== "undefined") {
+  console.info(
+    "[knot] Clerk publishable key in renderer:",
+    clerk.publishableKey ? `${clerk.publishableKey.slice(0, 12)}…` : "(missing)",
+  );
+}
 
 function useRecordingsRoot() {
   const [recordingsRoot, setRecordingsRoot] = useState<string | null>(null);
@@ -30,23 +37,34 @@ function useRecordingsRoot() {
   return recordingsRoot;
 }
 
-function OfflineBanner({ recordingsRoot }: { recordingsRoot: string | null }) {
+function OfflineBanner({
+  recordingsRoot,
+  onRetrySignIn,
+}: {
+  recordingsRoot: string | null;
+  onRetrySignIn: () => void;
+}) {
   return (
     <div className="offline-banner" role="status">
       <div>
         <strong>Offline mode</strong>
         <span> — recording locally, cloud sync unavailable</span>
       </div>
-      {recordingsRoot && (
-        <button
-          type="button"
-          className="offline-banner-path"
-          title="Open recordings folder"
-          onClick={() => void window.knot.openRecordingsFolder(recordingsRoot)}
-        >
-          Saved in: <code>{recordingsRoot}</code>
+      <div className="offline-banner-actions">
+        <button type="button" className="btn-ghost" onClick={onRetrySignIn}>
+          Try sign-in again
         </button>
-      )}
+        {recordingsRoot && (
+          <button
+            type="button"
+            className="offline-banner-path"
+            title="Open recordings folder"
+            onClick={() => void window.knot.openRecordingsFolder(recordingsRoot)}
+          >
+            Saved in: <code>{recordingsRoot}</code>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -59,18 +77,16 @@ function ClerkLoadGate({
   children: React.ReactNode;
 }) {
   const { isLoaded } = useAuth();
-  const [timedOut, setTimedOut] = useState(false);
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
-    if (isLoaded) return;
-    const id = window.setTimeout(() => setTimedOut(true), CLERK_LOAD_TIMEOUT_MS);
+    if (isLoaded) {
+      setSlow(false);
+      return;
+    }
+    const id = window.setTimeout(() => setSlow(true), CLERK_SLOW_MS);
     return () => window.clearTimeout(id);
   }, [isLoaded]);
-
-  // Auto-enter offline when Clerk never becomes ready.
-  useEffect(() => {
-    if (timedOut && !isLoaded) onOffline();
-  }, [timedOut, isLoaded, onOffline]);
 
   if (isLoaded) return children;
 
@@ -80,11 +96,24 @@ function ClerkLoadGate({
         <div className="auth-spinner" />
         <p>Starting Knot…</p>
         <p className="auth-loading-sub">
-          Connecting to Clerk… (offline recording unlocks in a few seconds if this fails)
+          {slow
+            ? "Clerk is taking longer than usual. Check your network, or continue offline."
+            : "Connecting to Clerk…"}
         </p>
-        <button type="button" className="auth-retry auth-retry--ghost" onClick={onOffline}>
-          Continue offline now
-        </button>
+        {slow && (
+          <div className="auth-loading-actions">
+            <button
+              type="button"
+              className="auth-retry"
+              onClick={() => window.location.reload()}
+            >
+              Retry connection
+            </button>
+            <button type="button" className="auth-retry auth-retry--ghost" onClick={onOffline}>
+              Continue offline
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -111,10 +140,16 @@ function ControlGate({
   return <ControlApp />;
 }
 
-function OfflineRecorder({ recordingsRoot }: { recordingsRoot: string | null }) {
+function OfflineRecorder({
+  recordingsRoot,
+  onRetrySignIn,
+}: {
+  recordingsRoot: string | null;
+  onRetrySignIn: () => void;
+}) {
   return (
     <DesktopAuthProvider value={{ mode: "offline", recordingsRoot }}>
-      <OfflineBanner recordingsRoot={recordingsRoot} />
+      <OfflineBanner recordingsRoot={recordingsRoot} onRetrySignIn={onRetrySignIn} />
       <ControlApp />
     </DesktopAuthProvider>
   );
@@ -127,9 +162,31 @@ export function ControlRoot() {
   );
 
   const goOffline = useCallback(() => setMode("offline"), []);
+  const retrySignIn = useCallback(() => {
+    if (!clerk.publishableKey) {
+      console.warn("[knot] Cannot retry Clerk — publishable key missing in renderer.");
+      return;
+    }
+    setMode("booting");
+  }, []);
+
+  if (!clerk.publishableKey) {
+    return (
+      <OfflineRecorder
+        recordingsRoot={recordingsRoot}
+        onRetrySignIn={() =>
+          window.alert(
+            "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is missing. Add it to apps/desktop/.env (same as web) and restart the desktop app.",
+          )
+        }
+      />
+    );
+  }
 
   if (mode === "offline") {
-    return <OfflineRecorder recordingsRoot={recordingsRoot} />;
+    return (
+      <OfflineRecorder recordingsRoot={recordingsRoot} onRetrySignIn={retrySignIn} />
+    );
   }
 
   return (

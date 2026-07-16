@@ -43,6 +43,8 @@ export function AuthScreen({ onContinueOffline, recordingsRoot }: AuthScreenProp
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [oauthBridgeReady, setOauthBridgeReady] = useState(true);
   const [oauthRedirectUrl, setOauthRedirectUrl] = useState<string | null>(null);
+  const [oauthWaiting, setOauthWaiting] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
     const transport = window.__clerk_internal_electron?.oauthTransport;
@@ -54,6 +56,22 @@ export function AuthScreen({ onContinueOffline, recordingsRoot }: AuthScreenProp
     setOauthBridgeReady(true);
     void transport.getRedirectUrl().then((url) => {
       setOauthRedirectUrl(url);
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.knot.onOAuthStatus((payload) => {
+      if (payload.status === "waiting") {
+        setOauthError(null);
+        setOauthWaiting(true);
+        return;
+      }
+      if (payload.status === "error") {
+        setOauthWaiting(false);
+        setOauthError(payload.message);
+        return;
+      }
+      setOauthWaiting(false);
     });
   }, []);
 
@@ -76,6 +94,17 @@ export function AuthScreen({ onContinueOffline, recordingsRoot }: AuthScreenProp
           <div className="auth-banner auth-banner--error">
             OAuth bridge missing — Google/GitHub may not work. You can still continue offline.
           </div>
+        )}
+
+        {oauthWaiting && (
+          <div className="auth-banner auth-banner--info">
+            Complete sign-in in your browser. Knot will return automatically. Click Google/GitHub
+            again if nothing happens.
+          </div>
+        )}
+
+        {oauthError && (
+          <div className="auth-banner auth-banner--error">{oauthError}</div>
         )}
 
         <div className="auth-toggle" role="tablist">
@@ -121,25 +150,20 @@ export function AuthScreen({ onContinueOffline, recordingsRoot }: AuthScreenProp
 
         <div className="auth-offline-block">
           <button type="button" className="auth-retry auth-retry--ghost" onClick={onContinueOffline}>
-            Continue offline — record without signing in
+            Continue offline
           </button>
           {recordingsRoot && (
             <p className="auth-oauth-redirect">
-              Local saves go to: <code>{recordingsRoot}</code>
+              Saves to: <code>{recordingsRoot}</code>
             </p>
           )}
         </div>
 
         <div className="auth-oauth-hint">
           <p>
-            <strong>Google / GitHub:</strong> opens your system browser, then returns to
-            Knot automatically.
+            Google / GitHub opens your browser, then returns via{" "}
+            {oauthRedirectUrl ? <code>{oauthRedirectUrl}</code> : "knot://app/"}.
           </p>
-          {oauthRedirectUrl && (
-            <p className="auth-oauth-redirect">
-              Redirect URI: <code>{oauthRedirectUrl}</code>
-            </p>
-          )}
         </div>
       </div>
     </div>

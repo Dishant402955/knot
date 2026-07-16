@@ -76,6 +76,19 @@ export default defineConfig(({ mode }) => {
           JSON.stringify(env[key] ?? ""),
         ]),
       ),
+      // Page loads over knot://app (proxied to Vite). Do NOT set server.origin to
+      // http://localhost — that forces absolute font/asset URLs and breaks CORS.
+      // Keep HMR on localhost; asset paths stay relative so they go through knot://.
+      server: {
+        cors: {
+          origin: ["knot://app", "http://localhost:5173", /^knot:\/\//],
+        },
+        hmr: {
+          protocol: "ws",
+          host: "localhost",
+          clientPort: 5173,
+        },
+      },
     },
   };
 });

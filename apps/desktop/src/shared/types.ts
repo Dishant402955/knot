@@ -71,6 +71,7 @@ export const IPC = {
   saveScreenshot: "desktop:save-screenshot",
   startSession: "desktop:start-session",
   endSession: "desktop:end-session",
+  discardSession: "desktop:discard-session",
   getSessionDir: "desktop:get-session-dir",
   getRecordingsRoot: "desktop:get-recordings-root",
   openDashboard: "desktop:open-dashboard",
@@ -82,14 +83,16 @@ export const IPC = {
   hideWebcam: "desktop:hide-webcam",
   updateWebcamBounds: "desktop:update-webcam-bounds",
   getWebcamBounds: "desktop:get-webcam-bounds",
-  getWebcamCaptureSourceId: "desktop:get-webcam-capture-source-id",
   setWebcamShape: "desktop:set-webcam-shape",
   setWebcamSize: "desktop:set-webcam-size",
   showIndicator: "desktop:show-indicator",
   hideIndicator: "desktop:hide-indicator",
   updateIndicator: "desktop:update-indicator",
+  /** Renderer → main: indicator UI has painted and is visible. */
+  indicatorReady: "desktop:indicator-ready",
   showCountdown: "desktop:show-countdown",
   hideCountdown: "desktop:hide-countdown",
+  countdownFinished: "desktop:countdown-finished",
   showRegionPicker: "desktop:show-region-picker",
   regionSelected: "desktop:region-selected",
   cancelRegion: "desktop:cancel-region",
@@ -101,7 +104,13 @@ export const IPC = {
   emitControlAction: "desktop:emit-control-action",
   notifyRecordingStopped: "desktop:notify-recording-stopped",
   permissionsCheck: "desktop:permissions-check",
+  oauthStatus: "desktop:oauth-status",
 } as const;
+
+export type OAuthStatusPayload =
+  | { status: "waiting" }
+  | { status: "idle" }
+  | { status: "error"; message: string };
 
 export type TrayAction =
   | "record"

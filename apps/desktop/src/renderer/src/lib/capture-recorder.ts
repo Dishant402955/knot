@@ -12,18 +12,27 @@ export type RecorderOptions = {
   region: RegionBounds | null;
   includeMic: boolean;
   includeSystemAudio: boolean;
-  includeWebcam: boolean;
+  /**
+   * When true, open the camera device and draw it onto the canvas.
+   * Use only for window/region capture — screen capture already includes the
+   * visible overlay window (compositing again causes a double bubble).
+   */
+  compositeWebcam: boolean;
   webcamShape: WebcamShape;
-  /** Capture the overlay window instead of opening a second camera device. */
-  webcamWindowSourceId?: string | null;
   frameOrigin: CaptureFrameOrigin;
   getWebcamBounds: () => Promise<WebcamBounds>;
   sessionId: string;
+  /** Called once per complete, independently-playable WebM segment. */
   onChunk: (index: number, blob: Blob) => Promise<void>;
   onError?: (error: Error) => void;
 };
 
-const CHUNK_MS = 5000;
+/** Target length of each independently playable segment. */
+const SEGMENT_MS = 5000;
+/** Overlap between consecutive recorders so the seam doesn't drop frames. */
+const SEGMENT_OVERLAP_MS = 150;
+/** Wait after requestData() so the encoder can flush before stop(). */
+const FLUSH_MS = 120;
 
 const shapeClip = (
   ctx: CanvasRenderingContext2D,
@@ -48,45 +57,109 @@ const shapeClip = (
   ctx.closePath();
 };
 
+class WriteQueue {
+  private queue: Array<() => Promise<void>> = [];
+  private running = false;
+
+  enqueue(task: () => Promise<void>) {
+    this.queue.push(task);
+    void this.flush();
+  }
+
+  private async flush() {
+    if (this.running) return;
+    this.running = true;
+    while (this.queue.length > 0) {
+      const task = this.queue.shift()!;
+      try {
+        await task();
+      } catch {
+        // Handler reports errors.
+      }
+    }
+    this.running = false;
+  }
+
+  async drain(): Promise<void> {
+    while (this.queue.length > 0 || this.running) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+}
+
+type ActiveSegment = {
+  index: number;
+  recorder: MediaRecorder;
+  parts: Blob[];
+};
+
+/**
+ * Produces independently playable WebM chunks by rotating MediaRecorder
+ * instances on the same live stream.
+ *
+ * Key details for complete segments:
+ * - Start the next recorder BEFORE stopping the previous (overlap) so frames
+ *   aren't dropped at the seam.
+ * - Call requestData() and wait briefly before stop() so the encoder flushes
+ *   the last frames into the final blob.
+ */
 export class CaptureRecorder {
   private screenStream: MediaStream | null = null;
   private webcamStream: MediaStream | null = null;
   private micStream: MediaStream | null = null;
   private composedStream: MediaStream | null = null;
-  private recorder: MediaRecorder | null = null;
+  private active: ActiveSegment | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private screenVideo: HTMLVideoElement | null = null;
   private webcamVideo: HTMLVideoElement | null = null;
-  private animationFrame = 0;
-  private chunkIndex = 0;
+  private drawTimer: ReturnType<typeof setInterval> | null = null;
+  private segmentTimer: ReturnType<typeof setTimeout> | null = null;
   private paused = false;
   private options: RecorderOptions | null = null;
-  private pendingChunks: Promise<void>[] = [];
+  private writeQueue = new WriteQueue();
   private cachedWebcamBounds: WebcamBounds | null = null;
   private frameOrigin: CaptureFrameOrigin = { x: 0, y: 0 };
-  private chunkWatchdog: ReturnType<typeof setInterval> | null = null;
-  private lastChunkAt = 0;
+  private nextChunkIndex = 0;
+  private mimeType = "video/webm";
+  private stopping = false;
+  private rotating = false;
 
   get isRecording() {
-    return this.recorder?.state === "recording" || this.recorder?.state === "paused";
+    const state = this.active?.recorder.state;
+    return state === "recording" || state === "paused";
+  }
+
+  get isPrepared() {
+    return Boolean(this.composedStream && !this.active);
   }
 
   get isPaused() {
     return this.paused;
   }
 
+  getLiveStream() {
+    return this.composedStream;
+  }
+
   updateWebcamBounds(bounds: WebcamBounds) {
     this.cachedWebcamBounds = bounds;
   }
 
-  async start(options: RecorderOptions) {
-    if (this.isRecording || this.recorder || this.screenStream) {
+  /**
+   * Heavy setup (desktop/mic/cam streams, canvas, paint loop).
+   * Call during countdown so commit() can start encoding immediately after.
+   */
+  async prepare(options: RecorderOptions) {
+    if (this.isRecording || this.active || this.screenStream) {
       throw new Error("Recording already in progress");
     }
 
     this.options = options;
-    this.chunkIndex = 0;
     this.paused = false;
+    this.stopping = false;
+    this.rotating = false;
+    this.nextChunkIndex = 0;
+    this.writeQueue = new WriteQueue();
     this.frameOrigin = options.frameOrigin;
     this.cachedWebcamBounds = await options.getWebcamBounds();
 
@@ -119,26 +192,14 @@ export class CaptureRecorder {
         });
       }
 
-      if (options.includeWebcam) {
-        if (options.webcamWindowSourceId) {
-          this.webcamStream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              mandatory: {
-                chromeMediaSource: "desktop",
-                chromeMediaSourceId: options.webcamWindowSourceId,
-              },
-            },
-          } as MediaStreamConstraints);
-        } else {
-          this.webcamStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-            },
-            audio: false,
-          });
-        }
+      if (options.compositeWebcam) {
+        this.webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+          audio: false,
+        });
       }
 
       const videoTrack = this.screenStream.getVideoTracks()[0];
@@ -166,6 +227,22 @@ export class CaptureRecorder {
       await screenVideo.play();
       this.screenVideo = screenVideo;
 
+      await new Promise<void>((resolve, reject) => {
+        const deadline = Date.now() + 5000;
+        const check = () => {
+          if (screenVideo.videoWidth > 0 && screenVideo.videoHeight > 0) {
+            resolve();
+            return;
+          }
+          if (Date.now() > deadline) {
+            reject(new Error("Screen capture produced no frames"));
+            return;
+          }
+          window.setTimeout(check, 50);
+        };
+        check();
+      });
+
       let webcamVideo: HTMLVideoElement | null = null;
       if (this.webcamStream) {
         webcamVideo = document.createElement("video");
@@ -176,63 +253,52 @@ export class CaptureRecorder {
         this.webcamVideo = webcamVideo;
       }
 
-      // Warm up a few painted frames before MediaRecorder starts so the first
-      // timeslice is less likely to be empty.
       await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        window.setTimeout(resolve, 50);
       });
 
-      const draw = () => {
-        if (!this.canvas || !ctx) {
-          return;
+      const paint = () => {
+        if (!this.canvas || !ctx) return;
+        if (this.paused) return;
+
+        if (region) {
+          ctx.drawImage(
+            screenVideo,
+            region.x,
+            region.y,
+            region.width,
+            region.height,
+            0,
+            0,
+            outWidth,
+            outHeight,
+          );
+        } else {
+          ctx.drawImage(screenVideo, 0, 0, outWidth, outHeight);
         }
 
-        if (!this.paused) {
-          if (region) {
-            ctx.drawImage(
-              screenVideo,
-              region.x,
-              region.y,
-              region.width,
-              region.height,
-              0,
-              0,
-              outWidth,
-              outHeight,
-            );
-          } else {
-            ctx.drawImage(screenVideo, 0, 0, outWidth, outHeight);
-          }
+        if (webcamVideo && this.options?.compositeWebcam && this.cachedWebcamBounds) {
+          const bounds = this.cachedWebcamBounds;
+          const wx = bounds.x - this.frameOrigin.x;
+          const wy = bounds.y - this.frameOrigin.y;
 
-          if (webcamVideo && this.options?.includeWebcam && this.cachedWebcamBounds) {
-            const bounds = this.cachedWebcamBounds;
-            const wx = bounds.x - this.frameOrigin.x;
-            const wy = bounds.y - this.frameOrigin.y;
-            const fromWindow = Boolean(this.options.webcamWindowSourceId);
+          ctx.save();
+          shapeClip(ctx, wx, wy, bounds.width, bounds.height, bounds.shape);
+          ctx.clip();
+          ctx.drawImage(webcamVideo, wx, wy, bounds.width, bounds.height);
+          ctx.restore();
 
-            if (fromWindow) {
-              ctx.drawImage(webcamVideo, wx, wy, bounds.width, bounds.height);
-            } else {
-              ctx.save();
-              shapeClip(ctx, wx, wy, bounds.width, bounds.height, bounds.shape);
-              ctx.clip();
-              ctx.drawImage(webcamVideo, wx, wy, bounds.width, bounds.height);
-              ctx.restore();
-
-              ctx.save();
-              shapeClip(ctx, wx, wy, bounds.width, bounds.height, bounds.shape);
-              ctx.strokeStyle = "rgba(255,255,255,0.85)";
-              ctx.lineWidth = 3;
-              ctx.stroke();
-              ctx.restore();
-            }
-          }
+          ctx.save();
+          shapeClip(ctx, wx, wy, bounds.width, bounds.height, bounds.shape);
+          ctx.strokeStyle = "rgba(255,255,255,0.85)";
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.restore();
         }
-
-        this.animationFrame = requestAnimationFrame(draw);
       };
 
-      this.animationFrame = requestAnimationFrame(draw);
+      paint();
+      this.drawTimer = setInterval(paint, 1000 / 30);
 
       this.composedStream = this.canvas.captureStream(30);
 
@@ -246,91 +312,195 @@ export class CaptureRecorder {
         }
       }
 
-      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      this.mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
         ? "video/webm;codecs=vp9,opus"
         : MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
           ? "video/webm;codecs=vp8,opus"
           : "video/webm";
-
-      this.recorder = new MediaRecorder(this.composedStream, {
-        mimeType,
-        videoBitsPerSecond: 5_000_000,
-      });
-
-      this.recorder.ondataavailable = (event) => {
-        if (!event.data || event.data.size === 0 || !this.options) return;
-
-        this.lastChunkAt = Date.now();
-        const index = this.chunkIndex++;
-        const task = this.options
-          .onChunk(index, event.data)
-          .catch((error: unknown) => {
-            this.options?.onError?.(
-              error instanceof Error ? error : new Error("Failed to save chunk"),
-            );
-          })
-          .finally(() => {
-            this.pendingChunks = this.pendingChunks.filter((item) => item !== task);
-          });
-        this.pendingChunks.push(task);
-      };
-
-      this.recorder.onerror = () => {
-        this.options?.onError?.(new Error("MediaRecorder error — stopping recording"));
-      };
-
-      this.lastChunkAt = Date.now();
-      // Timeslice forces periodic chunks (every 5s).
-      this.recorder.start(CHUNK_MS);
-
-      // If timeslice stalls, force a flush — but only when overdue.
-      this.chunkWatchdog = setInterval(() => {
-        if (this.recorder?.state !== "recording") return;
-        if (Date.now() - this.lastChunkAt < CHUNK_MS + 1500) return;
-        try {
-          this.recorder.requestData();
-        } catch {
-          // Ignore if recorder is mid-stop.
-        }
-      }, 1000);
     } catch (error) {
       this.cleanup();
-      throw error instanceof Error ? error : new Error("Failed to start recording");
+      throw error instanceof Error ? error : new Error("Failed to prepare recording");
+    }
+  }
+
+  /** Begin encoding immediately — call right when countdown hits 0. */
+  commit() {
+    if (!this.composedStream || !this.options) {
+      throw new Error("Recorder is not prepared");
+    }
+    if (this.active) {
+      throw new Error("Recording already started");
+    }
+
+    this.stopping = false;
+    this.paused = false;
+    this.beginSegment();
+    this.scheduleRotation();
+  }
+
+  /** Convenience: prepare + commit (used when countdown is off). */
+  async start(options: RecorderOptions) {
+    await this.prepare(options);
+    this.commit();
+  }
+
+  private beginSegment(): ActiveSegment {
+    if (!this.composedStream) {
+      throw new Error("No composed stream");
+    }
+
+    const index = this.nextChunkIndex++;
+    const parts: Blob[] = [];
+
+    const recorder = new MediaRecorder(this.composedStream, {
+      mimeType: this.mimeType,
+      videoBitsPerSecond: 5_000_000,
+    });
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        parts.push(event.data);
+      }
+    };
+
+    recorder.onerror = () => {
+      this.options?.onError?.(new Error("MediaRecorder error — stopping recording"));
+    };
+
+    const segment: ActiveSegment = { index, recorder, parts };
+    this.active = segment;
+    recorder.start();
+    return segment;
+  }
+
+  /**
+   * Flush encoder buffers, stop the recorder, and enqueue the complete blob.
+   */
+  private finalizeSegment(segment: ActiveSegment): Promise<void> {
+    return new Promise((resolve) => {
+      const { recorder, parts, index } = segment;
+      let settled = false;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        const blob = new Blob(parts, { type: this.mimeType });
+        if (blob.size > 0 && this.options) {
+          const opts = this.options;
+          this.writeQueue.enqueue(async () => {
+            await opts.onChunk(index, blob);
+          });
+        }
+        resolve();
+      };
+
+      if (recorder.state === "inactive") {
+        finish();
+        return;
+      }
+
+      recorder.addEventListener("stop", finish, { once: true });
+
+      // Flush pending encoded frames, then stop — without this the last
+      // ~100–300ms of a segment is often missing from the WebM.
+      try {
+        if (recorder.state === "recording" || recorder.state === "paused") {
+          recorder.requestData();
+        }
+      } catch {
+        // Ignore.
+      }
+
+      window.setTimeout(() => {
+        if (settled) return;
+        if (recorder.state === "inactive") {
+          finish();
+          return;
+        }
+        try {
+          recorder.stop();
+        } catch {
+          finish();
+        }
+      }, FLUSH_MS);
+    });
+  }
+
+  private scheduleRotation() {
+    if (this.segmentTimer) {
+      clearTimeout(this.segmentTimer);
+      this.segmentTimer = null;
+    }
+    if (this.stopping || this.paused) return;
+
+    this.segmentTimer = setTimeout(() => {
+      void this.rotateSegment();
+    }, SEGMENT_MS);
+  }
+
+  private async rotateSegment() {
+    if (this.stopping || this.paused || this.rotating) return;
+    const previous = this.active;
+    if (!previous || previous.recorder.state !== "recording") return;
+
+    this.rotating = true;
+
+    try {
+      // Start the next segment first so capture continues without a gap.
+      this.beginSegment();
+
+      // Brief overlap, then finalize the previous segment completely.
+      await new Promise((r) => setTimeout(r, SEGMENT_OVERLAP_MS));
+      await this.finalizeSegment(previous);
+    } finally {
+      this.rotating = false;
+      if (!this.stopping && !this.paused) {
+        this.scheduleRotation();
+      }
     }
   }
 
   pause() {
-    if (this.recorder?.state === "recording") {
-      this.recorder.pause();
+    if (this.active?.recorder.state === "recording") {
+      if (this.segmentTimer) {
+        clearTimeout(this.segmentTimer);
+        this.segmentTimer = null;
+      }
+      this.active.recorder.pause();
       this.paused = true;
     }
   }
 
   resume() {
-    if (this.recorder?.state === "paused") {
-      this.recorder.resume();
+    if (this.active?.recorder.state === "paused") {
+      this.active.recorder.resume();
       this.paused = false;
+      this.scheduleRotation();
     }
   }
 
   async stop() {
-    const recorder = this.recorder;
+    this.stopping = true;
 
-    if (!recorder || recorder.state === "inactive") {
-      this.cleanup();
-      return;
+    if (this.segmentTimer) {
+      clearTimeout(this.segmentTimer);
+      this.segmentTimer = null;
     }
 
-    if (recorder.state === "recording" || recorder.state === "paused") {
-      recorder.requestData();
+    // Wait for an in-flight rotation to finish so we don't double-stop.
+    const deadline = Date.now() + 3000;
+    while (this.rotating && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 20));
     }
 
-    await new Promise<void>((resolve) => {
-      recorder.addEventListener("stop", () => resolve(), { once: true });
-      recorder.stop();
-    });
+    const current = this.active;
+    this.active = null;
 
-    await Promise.allSettled(this.pendingChunks);
+    if (current) {
+      await this.finalizeSegment(current);
+    }
+
+    await this.writeQueue.drain();
     this.cleanup();
   }
 
@@ -338,8 +508,7 @@ export class CaptureRecorder {
     sourceId: string;
     mode: CaptureMode;
     region: RegionBounds | null;
-    includeWebcam: boolean;
-    webcamWindowSourceId?: string | null;
+    compositeWebcam: boolean;
     frameOrigin: CaptureFrameOrigin;
     getWebcamBounds: () => Promise<WebcamBounds>;
   }): Promise<Blob> {
@@ -393,24 +562,12 @@ export class CaptureRecorder {
       ctx.drawImage(video, 0, 0, width, height);
     }
 
-    if (options.includeWebcam) {
+    if (options.compositeWebcam) {
       try {
-        const webcamConstraints = options.webcamWindowSourceId
-          ? ({
-              audio: false,
-              video: {
-                mandatory: {
-                  chromeMediaSource: "desktop",
-                  chromeMediaSourceId: options.webcamWindowSourceId,
-                },
-              },
-            } as MediaStreamConstraints)
-          : ({
-              video: true,
-              audio: false,
-            } as MediaStreamConstraints);
-
-        const cam = await navigator.mediaDevices.getUserMedia(webcamConstraints);
+        const cam = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
         const camVideo = document.createElement("video");
         camVideo.srcObject = cam;
         camVideo.muted = true;
@@ -421,15 +578,11 @@ export class CaptureRecorder {
         const wx = bounds.x - options.frameOrigin.x;
         const wy = bounds.y - options.frameOrigin.y;
 
-        if (options.webcamWindowSourceId) {
-          ctx.drawImage(camVideo, wx, wy, bounds.width, bounds.height);
-        } else {
-          ctx.save();
-          shapeClip(ctx, wx, wy, bounds.width, bounds.height, bounds.shape);
-          ctx.clip();
-          ctx.drawImage(camVideo, wx, wy, bounds.width, bounds.height);
-          ctx.restore();
-        }
+        ctx.save();
+        shapeClip(ctx, wx, wy, bounds.width, bounds.height, bounds.shape);
+        ctx.clip();
+        ctx.drawImage(camVideo, wx, wy, bounds.width, bounds.height);
+        ctx.restore();
 
         cam.getTracks().forEach((t) => t.stop());
       } catch {
@@ -450,13 +603,15 @@ export class CaptureRecorder {
   }
 
   private cleanup() {
-    if (this.chunkWatchdog) {
-      clearInterval(this.chunkWatchdog);
-      this.chunkWatchdog = null;
+    if (this.segmentTimer) {
+      clearTimeout(this.segmentTimer);
+      this.segmentTimer = null;
     }
-    cancelAnimationFrame(this.animationFrame);
-    this.animationFrame = 0;
-    this.recorder = null;
+    if (this.drawTimer) {
+      clearInterval(this.drawTimer);
+      this.drawTimer = null;
+    }
+    this.active = null;
     this.composedStream?.getTracks().forEach((t) => t.stop());
     this.screenStream?.getTracks().forEach((t) => t.stop());
     this.webcamStream?.getTracks().forEach((t) => t.stop());
@@ -477,6 +632,7 @@ export class CaptureRecorder {
     this.options = null;
     this.cachedWebcamBounds = null;
     this.paused = false;
-    this.pendingChunks = [];
+    this.stopping = false;
+    this.rotating = false;
   }
 }

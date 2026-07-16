@@ -9,6 +9,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Monorepo + web scaffold | Done |
 | Marketing / landing site | Done |
 | Auth (Clerk) — web | Mostly done |
+| Auth (Clerk) — desktop | Done (same Clerk app; `knot://app/` native OAuth) |
 | Dashboard shell + sidebar | Done |
 | Folders (CRUD + UI) | Done |
 | Videos (metadata) | Partial |
@@ -17,7 +18,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Share links | Not started |
 | Comments & notifications | Partial (list UI only) |
 | API routes (desktop) | Not started |
-| Desktop (Electron) app | Phase A done (local capture) |
+| Desktop (Electron) app | Phase A+ done (local capture + Clerk) |
 | Infra (CI, tests) | Not started |
 
 ---
@@ -33,7 +34,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - **Folders** — full CRUD, nested folders, duplicate-name validation, root list page, detail page (`/dashboard/folder/:id`), breadcrumbs, grid/list view toggle, folder cards + rows, 3-dot actions menu, real video counts, recursive delete.
 - **Videos (metadata)** — `getAllUserVideos`, videos list page (read-only), video row component for list view.
 - **Notifications** — `getAllUserNotifications`, list page with empty state (read-only).
-- **Desktop (Phase A)** — Electron app in `apps/desktop`: source picker (screen/window/region), mic + system audio, webcam overlay (drag/resize, circle/square/rectangle), canvas compositing, 5s WebM chunks saved locally, countdown, pause/resume/stop, screenshots, tray + global shortcuts, floating recording indicator.
+- **Desktop (Phase A+)** — Electron app in `apps/desktop`: source picker (screen/window/region), mic + system audio, webcam overlay (drag/resize, circle/square/rectangle), canvas compositing, independently playable ~5s WebM chunks on disk, countdown gated behind a ready indicator tray, capture prepared during countdown for instant start at 0, pause/resume/stop, screenshots, tray + global shortcuts. Clerk desktop auth (`@clerk/electron`, same keys as web, `knot://app/` OAuth redirect, offline continue).
 
 ---
 
@@ -102,16 +103,17 @@ Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url
 
 ## Remaining — desktop & API
 
-Phase A (local capture shell) is done. Still required for the full Knot loop:
+Phase A+ (local capture + Clerk sign-in) is done. Still required for the full Knot loop:
 
 | Task | Notes |
 |------|-------|
-| **Desktop auth** | Clerk session token stored in OS keychain |
-| **API routes** | `POST /api/videos`, `/upload-url`, `/segments`, `PATCH /api/videos/:id` |
+| **API routes** | `POST /api/videos`, `/upload-url`, `/segments`, `PATCH /api/videos/:id` + bearer verification of Clerk tokens |
 | **Chunked upload during recording** | Presigned PUT → B2 → register segment while capturing |
-| **B2 upload API** | Server-side presigned URL generation |
+| **B2 upload API** | Server-side presigned URL generation (productized beyond `b2.ts` prototype) |
 | **Share link on record** | Show/copy link once chunk 0 uploads |
 | **Packaging** | Windows/macOS installers, auto-update |
+
+See `apps/desktop/README.md` for local recording + auth setup.
 
 ---
 
@@ -129,8 +131,15 @@ Phase A (local capture shell) is done. Still required for the full Knot loop:
 - Public routes in `proxy.ts` for `/watch/:id` (and later `/r/[slug]`)
 - Visibility checks on watch page (`PUBLIC` / `AUTHENTICATED` / `PRIVATE`)
 
+**Desktop (done for Phase A+):**
+- `@clerk/electron` bridge, OS keychain token storage
+- Same publishable key / Clerk app as web; UI over `knot://app/`
+- Native OAuth redirect `knot://app/` (Google/GitHub via system browser)
+- Offline continue without sign-in
+
 **Desktop only (later):**
 - Bearer token verification on API routes
+- Upload during recording using that token
 
 ---
 
@@ -151,5 +160,5 @@ Phase A (local capture shell) is done. Still required for the full Knot loop:
 | `apps/web/app/dashboard/videos/page.tsx` | List only |
 | `apps/web/app/dashboard/notifications/page.tsx` | List + empty state |
 | `apps/web/app/dashboard/page.tsx` | Recent folders + videos with grid/list toggle |
-| `apps/desktop/` | Phase A recorder (local chunks, tray, overlay) |
+| `apps/desktop/` | Phase A+ recorder (local playable chunks, Clerk auth, tray/countdown) |
 | `apps/web/app/watch/` | Not started |

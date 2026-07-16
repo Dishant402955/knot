@@ -1,11 +1,13 @@
-import { config as loadDotenv } from "dotenv";
-import { clerkEnvFromProcess } from "../shared/clerk-env";
-import { app, protocol, session } from "electron";
+import { app, BrowserWindow, ipcMain, protocol, session, shell } from "electron";
 import { createClerkBridge } from "@clerk/electron";
 import { storage } from "@clerk/electron/storage";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { pathToFileURL } from "url";
+
+import { IPC, type OAuthStatusPayload } from "../shared/types";
+import { clerkEnvFromProcess } from "../shared/clerk-env";
+import { config as loadDotenv } from "dotenv";
 
 export const KNOT_RENDERER_SCHEME = "knot";
 export const KNOT_RENDERER_HOST = "app";
@@ -91,6 +93,9 @@ export function initClerkBridge() {
       `[knot] OAuth redirect (Google/GitHub): ${KNOT_OAUTH_REDIRECT_URL} — add this in Clerk → Native applications`,
     );
     console.log(`[knot] Derived Frontend API host: ${clerkFapiHost()}`);
+    console.log(
+      "[knot] Renderer must load over knot:// (not http://localhost) for Clerk native auth.",
+    );
   }
 
   const bridge = createClerkBridge({
@@ -105,14 +110,141 @@ export function initClerkBridge() {
     userAgent: "Knot Desktop/0.1.0",
   });
 
-  clerkBridgeCleanup = () => bridge.cleanup();
+  clerkBridgeCleanup = () => {
+    cancelPendingOAuth(new Error("Clerk: OAuth flow was cancelled."));
+    bridge.cleanup();
+  };
+
+  // Replace Clerk's OAuth open handler so a stuck flow can be superseded.
+  installResilientOAuthTransport();
 
   registerProtocolClient();
 }
 
 export function cleanupClerkBridge() {
+  cancelPendingOAuth(new Error("Clerk: OAuth flow was cancelled."));
   clerkBridgeCleanup?.();
   clerkBridgeCleanup = null;
+}
+
+const OAUTH_OPEN = "clerk:oauth-transport:open";
+const OAUTH_GET_REDIRECT = "clerk:oauth-transport:get-redirect-url";
+const OAUTH_TIMEOUT_MS = 120_000;
+
+type PendingOAuth = {
+  resolve: (value: { callbackUrl: string }) => void;
+  reject: (reason?: unknown) => void;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
+let pendingOAuth: PendingOAuth | null = null;
+
+function broadcastOAuthStatus(payload: OAuthStatusPayload) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC.oauthStatus, payload);
+    }
+  }
+}
+
+function cancelPendingOAuth(reason?: Error) {
+  if (!pendingOAuth) return;
+  const pending = pendingOAuth;
+  clearTimeout(pending.timeout);
+  pendingOAuth = null;
+  if (reason) {
+    const message = reason.message.replace(/^Clerk:\s*/i, "");
+    if (!message.includes("replaced")) {
+      broadcastOAuthStatus({ status: "error", message });
+    } else {
+      broadcastOAuthStatus({ status: "idle" });
+    }
+    pending.reject(reason);
+  } else {
+    broadcastOAuthStatus({ status: "idle" });
+  }
+}
+
+function isOAuthCallbackUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${KNOT_RENDERER_SCHEME}:`) return false;
+    if (parsed.host !== KNOT_RENDERER_HOST) return false;
+    // Clerk may redirect to knot://app or knot://app/ — both are valid.
+    const pathOk = parsed.pathname === "/" || parsed.pathname === "";
+    // Require query/hash so a plain app reopen isn't treated as an OAuth return.
+    return pathOk && (parsed.search.length > 1 || parsed.hash.length > 1);
+  } catch {
+    return false;
+  }
+}
+
+function resolveOAuthCallback(url: string) {
+  if (!pendingOAuth || !isOAuthCallbackUrl(url)) return false;
+  const pending = pendingOAuth;
+  clearTimeout(pending.timeout);
+  pendingOAuth = null;
+  console.log("[knot] OAuth callback received — completing sign-in.");
+  broadcastOAuthStatus({ status: "idle" });
+  pending.resolve({ callbackUrl: url });
+  return true;
+}
+
+/** Public entry for deep-links (second-instance / open-url). */
+export function tryResolveOAuthCallback(url: string) {
+  return resolveOAuthCallback(url);
+}
+
+/**
+ * Clerk's default open handler throws if a previous Google/GitHub click left a
+ * pending flow (common when the deep-link never returned). Replace it so a new
+ * click cancels the old wait and starts clean.
+ */
+function installResilientOAuthTransport() {
+  ipcMain.removeHandler(OAUTH_GET_REDIRECT);
+  ipcMain.removeHandler(OAUTH_OPEN);
+
+  ipcMain.handle(OAUTH_GET_REDIRECT, () => KNOT_OAUTH_REDIRECT_URL);
+
+  ipcMain.handle(OAUTH_OPEN, async (_event, url: string) => {
+    if (pendingOAuth) {
+      console.warn("[knot] Cancelling previous OAuth flow to start a new one.");
+      cancelPendingOAuth(new Error("Clerk: previous OAuth flow was replaced."));
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new TypeError("Clerk: invalid OAuth URL");
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new TypeError(`Clerk: refusing to open unsupported OAuth URL protocol: ${parsed.protocol}`);
+    }
+
+    const callbackPromise = new Promise<{ callbackUrl: string }>((resolve, reject) => {
+      pendingOAuth = {
+        resolve,
+        reject,
+        timeout: setTimeout(() => {
+          cancelPendingOAuth(
+            new Error("Clerk: OAuth callback timed out. Click Google/GitHub again."),
+          );
+        }, OAUTH_TIMEOUT_MS),
+      };
+    });
+
+    try {
+      await shell.openExternal(url);
+      broadcastOAuthStatus({ status: "waiting" });
+      console.log("[knot] Opened system browser for OAuth. Waiting for knot://app/ return…");
+    } catch (err) {
+      cancelPendingOAuth(err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    }
+
+    return callbackPromise;
+  });
 }
 
 /**
@@ -141,32 +273,44 @@ function registerProtocolClient() {
   );
 }
 
-/** Control window URL — Vite HTTP in dev (HMR works); knot:// in production. */
+/**
+ * Always load the control UI over knot:// — required by @clerk/electron.
+ * Loading http://localhost makes Chromium send Origin while the SDK sends
+ * Authorization, and Clerk rejects that with 400 (origin_authorization_headers_conflict).
+ */
 export function controlWindowUrl() {
-  if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    const base = process.env.ELECTRON_RENDERER_URL.replace(/\/$/, "");
-    return `${base}/?window=control`;
-  }
-
   return `${KNOT_RENDERER_ORIGIN}/?window=control`;
 }
 
+export function overlayWindowUrl(windowName: string) {
+  return `${KNOT_RENDERER_ORIGIN}/?window=${windowName}`;
+}
+
 /**
- * Serve packaged renderer over knot:// (production only).
- * Dev loads Vite directly — proxying HMR through a custom scheme breaks scripts.
- * OAuth deep links still work via setAsDefaultProtocolClient + second-instance.
+ * Serve the renderer over knot://.
+ * - Dev: proxy to the Vite dev server (assets + HMR websocket still hit localhost).
+ * - Prod: serve packaged renderer files.
  */
 export async function registerKnotProtocol() {
-  if (isDev) {
-    return;
-  }
-
   const { net } = await import("electron");
+
+  const viteBase =
+    isDev && process.env.ELECTRON_RENDERER_URL
+      ? process.env.ELECTRON_RENDERER_URL.replace(/\/$/, "")
+      : null;
 
   protocol.handle(KNOT_RENDERER_SCHEME, (request) => {
     const url = new URL(request.url);
-    const pathname = url.pathname === "/" ? "" : url.pathname;
 
+    if (viteBase) {
+      const pathname = url.pathname || "/";
+      const target = `${viteBase}${pathname}${url.search}`;
+      return net.fetch(target, {
+        bypassCustomProtocolHandlers: true,
+      });
+    }
+
+    const pathname = url.pathname === "/" ? "" : url.pathname;
     const rendererRoot = join(__dirname, "../renderer");
     const filePath =
       pathname === "" || pathname === "/"
@@ -174,6 +318,56 @@ export async function registerKnotProtocol() {
         : join(rendererRoot, pathname.replace(/^\//, ""));
 
     return net.fetch(pathToFileURL(filePath).toString());
+  });
+
+  console.log(
+    viteBase
+      ? `[knot] knot:// → Vite proxy ${viteBase}`
+      : "[knot] knot:// → packaged renderer files",
+  );
+}
+
+/**
+ * @clerk/electron uses native mode (Authorization + _is_native=1).
+ * Chromium still attaches Origin: knot://app on fetches, which makes Clerk
+ * either reject (Origin+Authorization conflict) or omit CORS headers.
+ *
+ * Fix both sides:
+ * 1) Strip Origin on outbound Clerk FAPI requests (native path).
+ * 2) Ensure responses allow knot://app so the renderer can read the body.
+ */
+export function applyClerkNativeHeaderFix() {
+  const fapiHost = clerkFapiHost();
+  const urls = [
+    `https://${fapiHost}/*`,
+    "https://*.clerk.accounts.dev/*",
+    "https://api.clerk.com/*",
+    "https://*.clerk.com/*",
+  ];
+
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, (details, callback) => {
+    const headers = { ...details.requestHeaders };
+    // Always strip — native Electron must not send Origin with Authorization.
+    delete headers.Origin;
+    delete headers.origin;
+    callback({ requestHeaders: headers });
+  });
+
+  session.defaultSession.webRequest.onHeadersReceived({ urls }, (details, callback) => {
+    const responseHeaders = { ...(details.responseHeaders ?? {}) };
+
+    // Drop any prior ACAO so we can set a single value Chromium accepts.
+    delete responseHeaders["Access-Control-Allow-Origin"];
+    delete responseHeaders["access-control-allow-origin"];
+
+    responseHeaders["Access-Control-Allow-Origin"] = [KNOT_RENDERER_ORIGIN];
+    responseHeaders["Access-Control-Allow-Credentials"] = ["true"];
+    responseHeaders["Access-Control-Allow-Headers"] = [
+      "Authorization, Content-Type, Prefer, Clerk-Session-Id, Clerk-Db-Jwt, X-Requested-With",
+    ];
+    responseHeaders["Access-Control-Allow-Methods"] = ["GET, POST, PUT, PATCH, DELETE, OPTIONS"];
+
+    callback({ responseHeaders });
   });
 }
 
@@ -226,6 +420,7 @@ export function ensureSingleInstance(onSecondInstance: (argv: string[]) => void)
     const oauthUrl = argv.find((arg) => isKnotOAuthCallbackUrl(arg));
     if (oauthUrl) {
       console.log("[knot] OAuth deep-link received (Google/GitHub callback).");
+      resolveOAuthCallback(oauthUrl);
     }
     onSecondInstance(argv);
   });
@@ -235,6 +430,7 @@ export function ensureSingleInstance(onSecondInstance: (argv: string[]) => void)
     if (isKnotOAuthCallbackUrl(url)) {
       event.preventDefault();
       console.log("[knot] OAuth open-url received.");
+      resolveOAuthCallback(url);
       onSecondInstance([url]);
     }
   });

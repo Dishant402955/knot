@@ -4,6 +4,11 @@ import type { WebcamShape } from "@shared/types";
 
 let cachedStream: MediaStream | null = null;
 
+function releaseCachedStream() {
+  cachedStream?.getTracks().forEach((track) => track.stop());
+  cachedStream = null;
+}
+
 async function getWebcamStream() {
   const live =
     cachedStream?.active &&
@@ -13,8 +18,7 @@ async function getWebcamStream() {
     return cachedStream!;
   }
 
-  cachedStream?.getTracks().forEach((track) => track.stop());
-  cachedStream = null;
+  releaseCachedStream();
 
   cachedStream = await navigator.mediaDevices.getUserMedia({
     video: {
@@ -84,9 +88,14 @@ export function WebcamApp() {
 
   useEffect(() => {
     return () => {
-      cachedStream?.getTracks().forEach((track) => track.stop());
-      cachedStream = null;
+      releaseCachedStream();
     };
+  }, []);
+
+  useEffect(() => {
+    const onPageHide = () => releaseCachedStream();
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
   }, []);
 
   return (

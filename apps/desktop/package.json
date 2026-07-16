@@ -13,7 +13,7 @@
     "lint": "echo \"no lint configured\""
   },
   "dependencies": {
-    "@clerk/electron": "^0.0.14",
+    "@clerk/electron": "^0.0.15",
     "@clerk/react": "^6.12.4",
     "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",

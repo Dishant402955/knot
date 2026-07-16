@@ -1,20 +1,44 @@
 # Knot Desktop
 
-Electron recorder for Knot — screen/window/region capture, webcam overlay, and 5s WebM chunks saved locally. **Clerk auth** uses the **same env vars** as `apps/web` (Next.js).
+Electron recorder for Knot — screen/window/region capture, webcam overlay, and independently playable ~5s WebM chunks saved locally. **Clerk auth** uses the **same env vars** as `apps/web` (Next.js).
 
-## Features (Phase A)
+## Features (Phase A+)
 
 - Source picker: full screen, window, or region
 - Microphone + optional system audio
-- Webcam overlay window (drag / resize) with circle, square, rectangle shapes
-- Canvas compositing into the recorded stream
+- Webcam overlay (drag / resize) with circle, square, rectangle shapes
+- Canvas compositing into the recorded stream (window/region modes)
 - Countdown, start / pause / resume / stop
 - Screenshots (PNG)
-- Floating recording indicator + system tray status
+- Floating recording indicator (tray bar) + system tray menu
 - Global shortcuts: `Ctrl/⌘+Shift+R`, `Ctrl/⌘+Shift+P`, `Ctrl/⌘+Shift+S`
 - **Sign in / sign up** — same Clerk application as the Next.js dashboard
-- **Secure session storage** — tokens encrypted with OS keychain
-- **Authenticated API client** — `useKnotApi()` calls `http://localhost:3000` (your web app)
+- **Secure session storage** — tokens encrypted with OS keychain (`@clerk/electron`)
+- **Authenticated API client** — `useKnotApi()` calls `KNOT_WEB_APP_URL` (default `http://localhost:3000`)
+- **Continue offline** — record without signing in (local files only)
+
+## Recording flow
+
+Order of operations when you press **Record**:
+
+1. **Indicator tray** shows and must paint + acknowledge ready (`desktop:indicator-ready`).
+2. Control window is parked off-screen (recorder lives there; it is not `hide()`n).
+3. Capture is **prepared in parallel** (desktop/mic/cam streams + canvas) while the countdown runs.
+4. **Center countdown** starts only after the tray is fully ready.
+5. When the timer hits **0**, encoding **commits immediately** and the tray switches to `recording` (no post-countdown setup delay).
+
+### Chunks on disk
+
+Each session folder under the app user-data `recordings/` directory contains:
+
+| File | Meaning |
+|------|---------|
+| `chunk-0000.webm`, `chunk-0001.webm`, … | Independently playable WebM segments (~5s each) |
+| `session.json` | Manifest (session id, chunk count, state) |
+
+How chunks stay playable: the app **rotates `MediaRecorder`** on the same live stream (overlap + encoder flush), instead of using timeslice blobs (those lack a WebM header after the first slice and do not play alone).
+
+Open any `chunk-*.webm` in a player. There is no single appended `recording.webm` — that approach broke independent playback.
 
 ## Auth setup
 
@@ -31,7 +55,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard
 KNOT_WEB_APP_URL=http://localhost:3000
 ```
 
-**Option A — one file (easiest in dev):** only set Clerk vars in `apps/web/.env`. Desktop dev merges `apps/web/.env` automatically.
+**Option A — one file (easiest in dev):** only set Clerk vars in `apps/web/.env`. Desktop merges `apps/web/.env` (+ `.env.local`) automatically.
 
 **Option B:** copy `example.env` → `apps/desktop/.env` and paste the same Clerk values from web.
 
@@ -40,10 +64,13 @@ Also in [Clerk Dashboard → Native applications](https://dashboard.clerk.com/~/
 - Enable **Native API**
 - Allowed redirect URL (exact): `knot://app/`
 
+The desktop window loads over **`knot://app`** (not `http://localhost`). That is required by `@clerk/electron` — loading Vite over HTTP makes Clerk return HTTP 400 (`Origin` + `Authorization` conflict).
+
 For **Google / GitHub** buttons:
 
 - Enable those social connections in Clerk (same instance as the web app)
 - Desktop opens the system browser, then returns via `knot://app/`
+- A stuck OAuth flow can be superseded by clicking Google/GitHub again
 - You do **not** need to add `knot://` inside the Google/GitHub developer consoles — Clerk’s hosted callback handles that, then deep-links into Knot
 
 After sign-in on desktop, “Open dashboard” goes to `{KNOT_WEB_APP_URL}/dashboard` — the same Next.js app.
@@ -68,3 +95,11 @@ await api.json("/api/videos", { method: "POST", body: "..." });
 ```
 
 Requests use `Authorization: Bearer <token>` against `KNOT_WEB_APP_URL` (default `http://localhost:3000`).
+
+Desktop **API routes for upload** (`/api/videos`, presigned URLs, segments) are not implemented yet — see [Project Status](../../docs/project-status.md).
+
+## Not in Phase A+ (next)
+
+- Chunk upload to B2 during recording
+- Share link as soon as chunk 0 is uploaded
+- Packaged installers + auto-update

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   CaptureMode,
@@ -39,6 +39,10 @@ export function ControlApp() {
   const busyRef = useRef(false);
   const statusRef = useRef<"idle" | "countdown" | "recording" | "paused">("idle");
   const sessionIdRef = useRef<string | null>(null);
+  /** Bumped on cancel/failure so in-flight startRecording cannot resume as recording. */
+  const startEpochRef = useRef(0);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewStreamRef = useRef<MediaStream | null>(null);
   const [mode, setMode] = useState<CaptureMode>("screen");
   const [sources, setSources] = useState<DesktopSource[]>([]);
   const [sourceId, setSourceId] = useState<string | null>(null);
@@ -53,11 +57,10 @@ export function ControlApp() {
   const [status, setStatus] = useState<"idle" | "countdown" | "recording" | "paused">(
     "idle",
   );
-  const [chunkCount, setChunkCount] = useState(0);
-  const [lastChunkBytes, setLastChunkBytes] = useState(0);
   const [outputDir, setOutputDir] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const writeCountRef = useRef(0);
 
   useEffect(() => {
     statusRef.current = status;
@@ -101,24 +104,20 @@ export function ControlApp() {
       if (
         statusPayload.state === "recording" ||
         statusPayload.state === "paused" ||
-        statusPayload.state === "idle"
+        statusPayload.state === "idle" ||
+        statusPayload.state === "countdown"
       ) {
-        setStatus(
-          statusPayload.state === "idle"
-            ? "idle"
-            : statusPayload.state === "paused"
-              ? "paused"
-              : "recording",
-        );
+        setStatus(statusPayload.state);
       }
 
       if (statusPayload.state === "recording" || statusPayload.state === "paused") {
         setElapsedMs(statusPayload.elapsedMs);
-        setChunkCount(statusPayload.chunkCount);
       }
 
-      if (statusPayload.state === "idle") {
-        setElapsedMs(0);
+      if (statusPayload.state === "idle" || statusPayload.state === "countdown") {
+        if (statusPayload.state === "idle") {
+          setElapsedMs(0);
+        }
       }
     };
 
@@ -138,14 +137,67 @@ export function ControlApp() {
     });
   }, []);
 
+  const stopLivePreview = useCallback(() => {
+    previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+    previewStreamRef.current = null;
+    if (previewVideoRef.current && !recorderRef.current.isRecording) {
+      previewVideoRef.current.srcObject = null;
+    }
+  }, []);
+
+  const startLivePreview = useCallback(
+    async (id: string) => {
+      stopLivePreview();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            // @ts-expect-error Electron desktop capture constraint
+            mandatory: {
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: id,
+              maxFrameRate: 15,
+            },
+          },
+        });
+        previewStreamRef.current = stream;
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+          await previewVideoRef.current.play().catch(() => undefined);
+        }
+      } catch {
+        // Permission / source may be unavailable until refresh.
+      }
+    },
+    [stopLivePreview],
+  );
+
   useEffect(() => {
+    if (status !== "idle" || !sourceId || mode === "region") {
+      if (status === "idle") stopLivePreview();
+      return;
+    }
+
+    void startLivePreview(sourceId);
+    return () => {
+      stopLivePreview();
+    };
+  }, [sourceId, status, mode, startLivePreview, stopLivePreview]);
+
+  useEffect(() => {
+    // Don't fight the recorder while a session is active (window/region mode
+    // keeps the overlay closed so the camera can be used for compositing).
+    if (status === "countdown" || status === "recording" || status === "paused") {
+      return;
+    }
+
     if (includeWebcam) {
       void window.knot.showWebcam(webcamShape);
       void window.knot.setWebcamSize(webcamSize);
     } else {
       void window.knot.hideWebcam();
     }
-  }, [includeWebcam, webcamShape, webcamSize]);
+  }, [includeWebcam, webcamShape, webcamSize, status]);
 
   const changeWebcamShape = (shape: WebcamShape) => {
     setWebcamShape(shape);
@@ -158,6 +210,8 @@ export function ControlApp() {
   };
 
   const resetAfterFailure = useCallback(async () => {
+    startEpochRef.current += 1;
+
     try {
       await recorderRef.current.stop();
     } catch {
@@ -169,29 +223,52 @@ export function ControlApp() {
     await window.knot.showControl();
 
     try {
-      await window.knot.endSession();
+      await window.knot.discardSession();
     } catch {
-      // Session may already be ended.
+      // Session may already be cleared.
+    }
+
+    try {
+      await window.knot.setRecordingState("idle");
+    } catch {
+      // Main may already be idle.
+    }
+
+    if (includeWebcam) {
+      await window.knot.showWebcam(webcamShape);
+      await window.knot.setWebcamSize(webcamSize);
     }
 
     setStatus("idle");
     setElapsedMs(0);
-  }, []);
+    sessionIdRef.current = null;
+  }, [includeWebcam, webcamShape, webcamSize]);
 
   const cancelSession = useCallback(async () => {
     if (statusRef.current !== "countdown") return;
 
     await resetAfterFailure();
+    setMessage("Countdown cancelled.");
     await window.knot.notifyRecordingStopped();
   }, [resetAfterFailure]);
 
   const startRecording = useCallback(async () => {
     if (!sourceId || busyRef.current) return;
-    if (statusRef.current === "recording" || statusRef.current === "paused") return;
+    if (
+      statusRef.current === "countdown" ||
+      statusRef.current === "recording" ||
+      statusRef.current === "paused"
+    ) {
+      return;
+    }
 
     busyRef.current = true;
     setBusy(true);
     setMessage(null);
+
+    const epoch = ++startEpochRef.current;
+    const stillCurrent = () => epoch === startEpochRef.current;
+    const phase = () => statusRef.current;
 
     try {
       let activeRegion = region;
@@ -202,87 +279,132 @@ export function ControlApp() {
           setMessage("Region selection cancelled.");
           return;
         }
+        if (!stillCurrent()) return;
         activeRegion = picked;
         setRegion(picked);
       }
 
       const session = await window.knot.startSession();
+      if (!stillCurrent()) {
+        try {
+          await window.knot.discardSession();
+        } catch {
+          // Already discarded.
+        }
+        return;
+      }
+
       sessionIdRef.current = session.sessionId;
       setOutputDir(session.outputDir);
-      setChunkCount(0);
-      setLastChunkBytes(0);
+      writeCountRef.current = 0;
       setStatus("countdown");
 
+      // 1) Tray must be fully painted + ready BEFORE any countdown UI.
+      await window.knot.showIndicator();
+      if (!stillCurrent() || phase() !== "countdown") return;
+
       await window.knot.hideControl();
+      if (!stillCurrent() || phase() !== "countdown") return;
 
-      if (countdownSeconds > 0) {
-        await window.knot.showCountdown(countdownSeconds);
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, countdownSeconds * 1000);
+      const compositeWebcam = includeWebcam && mode !== "screen";
+
+      // Warm capture in the background while the countdown runs, so encoding
+      // can start the instant the center timer hits 0 (no post-countdown delay).
+      const preparePromise = (async () => {
+        if (includeWebcam && mode === "screen") {
+          await window.knot.showWebcam(webcamShape);
+          await window.knot.setWebcamSize(webcamSize);
+        } else {
+          await window.knot.hideWebcam();
+        }
+
+        stopLivePreview();
+
+        const frameOrigin = await window.knot.getCaptureFrameOrigin({
+          sourceId,
+          mode,
+          region: mode === "region" ? activeRegion : null,
         });
-        await window.knot.hideCountdown();
-      }
 
-      if (includeWebcam) {
-        await window.knot.showWebcam(webcamShape);
-        await window.knot.setWebcamSize(webcamSize);
-      }
+        await recorderRef.current.prepare({
+          sourceId,
+          mode,
+          region: mode === "region" ? activeRegion : null,
+          includeMic,
+          includeSystemAudio,
+          compositeWebcam,
+          webcamShape,
+          frameOrigin,
+          sessionId: session.sessionId,
+          getWebcamBounds: () => window.knot.getWebcamBounds(),
+          onChunk: async (index, blob) => {
+            if (blob.size === 0) return;
+            if (epoch !== startEpochRef.current) return;
 
-      let webcamWindowSourceId: string | null = null;
-      if (includeWebcam) {
-        webcamWindowSourceId = await window.knot.getWebcamCaptureSourceId();
-        if (!webcamWindowSourceId) {
-          throw new Error(
-            "Could not capture the webcam overlay. Enable webcam and try again.",
-          );
+            const buffer = await blob.arrayBuffer();
+            const activeSessionId = sessionIdRef.current ?? session.sessionId;
+            const saved = await window.knot.saveChunk({
+              sessionId: activeSessionId,
+              index,
+              buffer,
+            });
+            writeCountRef.current = Math.max(writeCountRef.current, index + 1);
+            setMessage(`Chunk ${index + 1} · ${(saved.size / 1024).toFixed(0)} KB`);
+          },
+          onError: (error) => {
+            setMessage(error.message);
+            if (error.message.includes("MediaRecorder error")) {
+              void stopRecordingRef.current?.();
+            }
+          },
+        });
+      })();
+
+      // 2) Only now show the center countdown (tray is already ready).
+      //    Prepare continues in parallel — we await it AFTER the timer so a
+      //    slow prepare never blocks the countdown from starting.
+      if (countdownSeconds > 0) {
+        const countdownResult = await window.knot.runCountdown(countdownSeconds);
+        if (!countdownResult.completed || !stillCurrent() || phase() !== "countdown") {
+          void preparePromise.catch(() => undefined);
+          try {
+            await recorderRef.current.stop();
+          } catch {
+            // Prepare-only cleanup.
+          }
+          return;
         }
       }
 
-      const frameOrigin = await window.knot.getCaptureFrameOrigin({
-        sourceId,
-        mode,
-        region: mode === "region" ? activeRegion : null,
-      });
+      try {
+        await preparePromise;
+      } catch (prepareError) {
+        if (!stillCurrent()) return;
+        throw prepareError;
+      }
 
-      await recorderRef.current.start({
-        sourceId,
-        mode,
-        region: mode === "region" ? activeRegion : null,
-        includeMic,
-        includeSystemAudio,
-        includeWebcam,
-        webcamShape,
-        webcamWindowSourceId,
-        frameOrigin,
-        sessionId: session.sessionId,
-        getWebcamBounds: () => window.knot.getWebcamBounds(),
-        onChunk: async (index, blob) => {
-          if (blob.size === 0) return;
+      if (!stillCurrent() || phase() !== "countdown") {
+        try {
+          await recorderRef.current.stop();
+        } catch {
+          // Ignore.
+        }
+        return;
+      }
 
-          const buffer = await blob.arrayBuffer();
-          const activeSessionId = sessionIdRef.current ?? session.sessionId;
-          const saved = await window.knot.saveChunk({
-            sessionId: activeSessionId,
-            index,
-            buffer,
-          });
-          setChunkCount((prev) => Math.max(prev, index + 1));
-          setLastChunkBytes(saved.size);
-          setMessage(`Chunk ${index + 1} · ${(saved.size / 1024).toFixed(0)} KB → disk`);
-        },
-        onError: (error) => {
-          setMessage(error.message);
-          if (error.message.includes("MediaRecorder error")) {
-            void stopRecordingRef.current?.();
-          }
-        },
-      });
-
-      await window.knot.showIndicator();
+      // 3) Timer done → start encoding + flip tray to "recording" immediately.
+      recorderRef.current.commit();
       await window.knot.setRecordingState("recording");
       setStatus("recording");
       setMessage(`Recording → ${session.outputDir}`);
+
+      const live = recorderRef.current.getLiveStream();
+      if (live && previewVideoRef.current) {
+        previewVideoRef.current.srcObject = live;
+        void previewVideoRef.current.play().catch(() => undefined);
+      }
     } catch (error) {
+      if (!stillCurrent()) return;
       await resetAfterFailure();
       setMessage(error instanceof Error ? error.message : "Failed to start recording");
     } finally {
@@ -300,6 +422,7 @@ export function ControlApp() {
     webcamShape,
     webcamSize,
     resetAfterFailure,
+    stopLivePreview,
   ]);
 
   const stopRecordingRef = useRef<(() => Promise<void>) | null>(null);
@@ -315,18 +438,28 @@ export function ControlApp() {
       const ended = await window.knot.endSession();
       await window.knot.setRecordingState("idle");
       await window.knot.hideIndicator();
+
+      if (includeWebcam) {
+        await window.knot.showWebcam(webcamShape);
+        await window.knot.setWebcamSize(webcamSize);
+      }
+
       await window.knot.showControl();
       setStatus("idle");
       setElapsedMs(0);
       sessionIdRef.current = null;
-      setChunkCount(ended.chunkCount ?? 0);
+      writeCountRef.current = 0;
       setMessage(
         ended.outputDir
-          ? `Saved ${ended.chunkCount ?? 0} chunk(s) in folder:\n${ended.outputDir}`
+          ? `Saved → ${ended.outputDir}\nEach chunk-*.webm plays on its own.`
           : recordingsRoot
-            ? `Recording stopped. Files live under:\n${recordingsRoot}`
+            ? `Recording saved under:\n${recordingsRoot}`
             : "Recording stopped.",
       );
+      stopLivePreview();
+      if (sourceId && mode !== "region") {
+        void startLivePreview(sourceId);
+      }
       await window.knot.notifyRecordingStopped();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to stop recording");
@@ -336,7 +469,7 @@ export function ControlApp() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [resetAfterFailure, recordingsRoot]);
+  }, [resetAfterFailure, recordingsRoot, includeWebcam, webcamShape, webcamSize, sourceId, mode, startLivePreview, stopLivePreview]);
 
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
@@ -382,11 +515,20 @@ export function ControlApp() {
         setRegion(picked);
       }
 
-      let webcamWindowSourceId: string | null = null;
-      if (includeWebcam) {
+      const compositeWebcam = includeWebcam && mode !== "screen";
+
+      // Hide Knot UI so it isn't in the shot.
+      await window.knot.hideControl();
+
+      if (includeWebcam && mode === "screen") {
         await window.knot.showWebcam(webcamShape);
-        webcamWindowSourceId = await window.knot.getWebcamCaptureSourceId();
+        await window.knot.setWebcamSize(webcamSize);
+      } else if (compositeWebcam) {
+        await window.knot.hideWebcam();
       }
+
+      // Give Windows a beat to remove the control window from the desktop frame.
+      await new Promise((r) => setTimeout(r, 250));
 
       const frameOrigin = await window.knot.getCaptureFrameOrigin({
         sourceId,
@@ -398,21 +540,25 @@ export function ControlApp() {
         sourceId,
         mode,
         region: mode === "region" ? activeRegion : null,
-        includeWebcam,
-        webcamWindowSourceId,
+        compositeWebcam,
         frameOrigin,
         getWebcamBounds: () => window.knot.getWebcamBounds(),
       });
 
       const buffer = await blob.arrayBuffer();
       const saved = await window.knot.saveScreenshot({ buffer, format: "png" });
-      setMessage(`Screenshot → ${saved.path}`);
+      setMessage(`Screenshot â†’ ${saved.path}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Screenshot failed");
     } finally {
+      if (includeWebcam) {
+        await window.knot.showWebcam(webcamShape);
+        await window.knot.setWebcamSize(webcamSize);
+      }
+      await window.knot.showControl();
       setBusy(false);
     }
-  }, [sourceId, region, mode, includeWebcam, webcamShape]);
+  }, [sourceId, region, mode, includeWebcam, webcamShape, webcamSize]);
 
   const handleAction = useCallback(
     (action: ControlAction) => {
@@ -462,36 +608,26 @@ export function ControlApp() {
     return `${m}:${s}`;
   };
 
+
   const isLive = status === "recording" || status === "paused";
 
   return (
-    <div className="control-shell">
+    <div className="control-shell control-shell--compact">
       <header className="control-top">
-        <div>
-          <div className="brand-lockup">
-            <BrandMark />
-            <div className="brand-copy">
-              <h1>Knot</h1>
-              <p>Cold capture. Instant chunks. Local first.</p>
+        <div className="brand-lockup">
+          <BrandMark />
+          <div className="brand-copy">
+            <h1>Knot</h1>
+            <div className="status-chip" data-state={status}>
+              <span className="status-dot" />
+              <span>{status}</span>
+              {isLive && (
+                <>
+                  <span>·</span>
+                  <span>{formatElapsed(elapsedMs)}</span>
+                </>
+              )}
             </div>
-          </div>
-
-          <div className="status-chip" data-state={status}>
-            <span className="status-dot" />
-            <span>{status}</span>
-            {isLive && (
-              <>
-                <span>·</span>
-                <span>{formatElapsed(elapsedMs)}</span>
-                <span>·</span>
-                <span>
-                  {chunkCount} chunk{chunkCount === 1 ? "" : "s"}
-                  {lastChunkBytes > 0
-                    ? ` · last ${(lastChunkBytes / 1024).toFixed(0)} KB`
-                    : ""}
-                </span>
-              </>
-            )}
           </div>
         </div>
 
@@ -507,15 +643,15 @@ export function ControlApp() {
               void window.knot.openRecordingsFolder(outputDir ?? recordingsRoot ?? undefined)
             }
           >
-            Recordings
+            Folder
           </button>
         </div>
       </header>
 
-      <div className="control-grid">
+      <div className="control-grid control-grid--compact">
         <section className="panel preview-panel">
           <div className="panel-head">
-            <p className="panel-label">Preview</p>
+            <p className="panel-label">Live preview</p>
             <button
               className="btn-ghost"
               onClick={() => void refreshSources()}
@@ -526,206 +662,184 @@ export function ControlApp() {
           </div>
 
           <div className="preview-stage">
-            {selectedSource ? (
-              <>
-                <img src={selectedSource.thumbnailDataUrl} alt={selectedSource.name} />
-                <div className="preview-meta">
-                  <strong>{selectedSource.name}</strong>
-                  <span>{mode}</span>
-                </div>
-              </>
-            ) : (
-              <p className="preview-empty">
-                Grant screen permission, then refresh sources.
-              </p>
+            <video
+              ref={previewVideoRef}
+              className="preview-video"
+              muted
+              playsInline
+              autoPlay
+            />
+            {!selectedSource && (
+              <p className="preview-empty">Pick a source to preview.</p>
+            )}
+            {selectedSource && mode === "region" && status === "idle" && (
+              <p className="preview-empty">Region selected when you record.</p>
+            )}
+            {selectedSource && (
+              <div className="preview-meta">
+                <strong>{selectedSource.name}</strong>
+                <span>{mode}</span>
+              </div>
             )}
           </div>
         </section>
 
-        <section className="panel sources-panel">
-          <div className="panel-head">
-            <p className="panel-label">Source</p>
-            <div className="segment">
-              {(["screen", "window", "region"] as CaptureMode[]).map((item) => (
+        <aside className="side-rail">
+          <section className="panel sources-panel">
+            <div className="panel-head">
+              <p className="panel-label">Source</p>
+              <div className="segment">
+                {(["screen", "window", "region"] as CaptureMode[]).map((item) => (
+                  <button
+                    key={item}
+                    data-active={mode === item}
+                    onClick={() => {
+                      setMode(item);
+                      setRegion(null);
+                    }}
+                    disabled={status !== "idle"}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="source-grid source-grid--compact">
+              {sources.map((source) => (
                 <button
-                  key={item}
-                  data-active={mode === item}
-                  onClick={() => {
-                    setMode(item);
-                    setRegion(null);
-                  }}
+                  key={source.id}
+                  className="source-card"
+                  data-active={sourceId === source.id}
+                  onClick={() => setSourceId(source.id)}
                   disabled={status !== "idle"}
                 >
-                  {item}
+                  <img src={source.thumbnailDataUrl} alt="" />
+                  <span>{source.name}</span>
                 </button>
               ))}
+              {sources.length === 0 && (
+                <p className="preview-empty">No sources yet.</p>
+              )}
             </div>
-          </div>
+          </section>
 
-          <div className="source-grid">
-            {sources.map((source) => (
-              <button
-                key={source.id}
-                className="source-card"
-                data-active={sourceId === source.id}
-                onClick={() => setSourceId(source.id)}
-                disabled={status !== "idle"}
-              >
-                <img src={source.thumbnailDataUrl} alt={source.name} />
-                <span>{source.name}</span>
-              </button>
-            ))}
-            {sources.length === 0 && (
-              <p className="preview-empty">No sources yet.</p>
+          <section className="panel settings-card settings-card--compact">
+            <p className="panel-label">Capture</p>
+            <div className="toggle-list">
+              <label className="toggle">
+                Mic
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={includeMic}
+                    onChange={(e) => setIncludeMic(e.target.checked)}
+                    disabled={status !== "idle"}
+                  />
+                  <span />
+                </span>
+              </label>
+              <label className="toggle">
+                System
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={includeSystemAudio}
+                    onChange={(e) => setIncludeSystemAudio(e.target.checked)}
+                    disabled={status !== "idle"}
+                  />
+                  <span />
+                </span>
+              </label>
+              <label className="toggle">
+                Cam
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={includeWebcam}
+                    onChange={(e) => setIncludeWebcam(e.target.checked)}
+                    disabled={status !== "idle"}
+                  />
+                  <span />
+                </span>
+              </label>
+            </div>
+
+            {includeWebcam && (
+              <>
+                <div className="shape-row">
+                  {SHAPES.map((shape) => (
+                    <button
+                      key={shape}
+                      className="shape-btn"
+                      data-active={webcamShape === shape}
+                      title={shape}
+                      onClick={() => changeWebcamShape(shape)}
+                      disabled={status !== "idle"}
+                    >
+                      <span className={`shape-ico ${shape}`} />
+                    </button>
+                  ))}
+                </div>
+                <div className="segment size-segment">
+                  {WEBCAM_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      data-active={webcamSize === size}
+                      onClick={() => changeWebcamSize(size)}
+                      disabled={status !== "idle"}
+                    >
+                      {size[0]!.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
-          </div>
 
-          {mode === "region" && (
-            <p className="region-note">
-              Region{" "}
-              {region
-                ? `${region.width}×${region.height} @ ${region.x},${region.y}`
-                : "selected on start / screenshot"}
-            </p>
-          )}
-        </section>
-      </div>
-
-      <div className="settings-row">
-        <section className="panel settings-card">
-          <p className="panel-label">Inputs</p>
-          <div className="toggle-list">
-            <label className="toggle">
-              Microphone
-              <span className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={includeMic}
-                  onChange={(e) => setIncludeMic(e.target.checked)}
-                  disabled={status !== "idle"}
-                />
-                <span />
-              </span>
-            </label>
-            <label className="toggle">
-              System audio
-              <span className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={includeSystemAudio}
-                  onChange={(e) => setIncludeSystemAudio(e.target.checked)}
-                  disabled={status !== "idle"}
-                />
-                <span />
-              </span>
-            </label>
-            <label className="toggle">
-              Webcam overlay
-              <span className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={includeWebcam}
-                  onChange={(e) => setIncludeWebcam(e.target.checked)}
-                  disabled={status !== "idle"}
-                />
-                <span />
-              </span>
-            </label>
-          </div>
-        </section>
-
-        <section className="panel settings-card">
-          <p className="panel-label">Webcam overlay</p>
-          <div className="shape-row">
-            {SHAPES.map((shape) => (
-              <button
-                key={shape}
-                className="shape-btn"
-                data-active={webcamShape === shape}
-                title={shape}
-                onClick={() => changeWebcamShape(shape)}
+            <label className="countdown-field">
+              <span>Countdown</span>
+              <select
+                className="select-cold"
+                value={countdownSeconds}
+                onChange={(e) => setCountdownSeconds(Number(e.target.value))}
                 disabled={status !== "idle"}
               >
-                <span className={`shape-ico ${shape}`} />
-              </button>
-            ))}
-          </div>
-
-          <div className="segment size-segment">
-            {WEBCAM_SIZES.map((size) => (
-              <button
-                key={size}
-                data-active={webcamSize === size}
-                onClick={() => changeWebcamSize(size)}
-                disabled={status !== "idle"}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel settings-card">
-          <p className="panel-label">Countdown</p>
-          <select
-            className="select-cold"
-            value={countdownSeconds}
-            onChange={(e) => setCountdownSeconds(Number(e.target.value))}
-            disabled={status !== "idle"}
-          >
-            {[0, 3, 5].map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? "None" : `${n} seconds`}
-              </option>
-            ))}
-          </select>
-        </section>
+                {[0, 3, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n === 0 ? "Off" : `${n}s`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+        </aside>
       </div>
 
       <section className="action-bar">
         <div className="action-meta">
           <div className="timer">{isLive ? formatElapsed(elapsedMs) : "00:00"}</div>
           <div className="hint">
-            {selectedSource?.name ?? "No source"} · ⌘/Ctrl+Shift+R start/stop · P pause · S
-            shot
+            {message ??
+              `${selectedSource?.name ?? "No source"} · Ctrl+Shift+R record · S shot`}
           </div>
-          {(outputDir || recordingsRoot) && (
-            <button
-              type="button"
-              className="save-path-chip"
-              onClick={() =>
-                void window.knot.openRecordingsFolder(outputDir ?? recordingsRoot ?? undefined)
-              }
-            >
-              {outputDir ? (
-                <>
-                  Session folder: <code>{outputDir}</code>
-                </>
-              ) : (
-                <>
-                  Saves to: <code>{recordingsRoot}</code>
-                </>
-              )}
-            </button>
-          )}
         </div>
 
         <div className="action-buttons">
           <button
             className="btn-secondary"
             onClick={() => void takeScreenshot()}
-            disabled={!sourceId || busy}
+            disabled={!sourceId || busy || isLive}
           >
-            Screenshot
+            Shot
           </button>
 
           {!isLive ? (
             <button
               className="btn-record"
               onClick={() => void startRecording()}
-              disabled={!sourceId || busy}
+              disabled={!sourceId || busy || status === "countdown"}
             >
-              Start recording
+              Record
             </button>
           ) : (
             <>
@@ -738,18 +852,13 @@ export function ControlApp() {
                   Resume
                 </button>
               )}
-              <button
-                className="btn-stop"
-                onClick={() => void stopRecording()}
-              >
+              <button className="btn-stop" onClick={() => void stopRecording()}>
                 Stop
               </button>
             </>
           )}
         </div>
       </section>
-
-      {message && <div className="message-toast">{message}</div>}
     </div>
   );
 }

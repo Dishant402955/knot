@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 export function CountdownApp() {
   const [value, setValue] = useState<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const finishedRef = useRef(false);
 
   useEffect(() => {
     const clearTick = () => {
@@ -12,11 +13,20 @@ export function CountdownApp() {
       }
     };
 
+    const finish = () => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      clearTick();
+      setValue(null);
+      window.knot.notifyCountdownFinished();
+    };
+
     const off = window.knot.onCountdown((seconds) => {
       clearTick();
+      finishedRef.current = false;
 
       if (seconds <= 0) {
-        setValue(null);
+        finish();
         return;
       }
 
@@ -25,10 +35,11 @@ export function CountdownApp() {
 
       intervalRef.current = window.setInterval(() => {
         remaining -= 1;
-        setValue(remaining > 0 ? remaining : null);
-        if (remaining <= 0) {
-          clearTick();
+        if (remaining > 0) {
+          setValue(remaining);
+          return;
         }
+        finish();
       }, 1000);
     });
 

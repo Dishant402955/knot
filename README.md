@@ -112,7 +112,7 @@ pnpm --filter desktop dev
 # or: pnpm dev:desktop
 ```
 
-> **Note:** Desktop Phase A captures locally (5s WebM chunks on disk). Cloud upload + Clerk desktop auth are not wired yet. See [Project Status](./docs/project-status.md).
+> **Note:** Desktop Phase A+ captures locally (independently playable ~5s WebM chunks) and supports Clerk sign-in (same app as web). Cloud upload during recording is not wired yet. See [Project Status](./docs/project-status.md) and [Desktop README](./apps/desktop/README.md).
 
 ## License
 
