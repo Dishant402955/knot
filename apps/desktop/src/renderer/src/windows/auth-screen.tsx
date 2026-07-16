@@ -33,7 +33,12 @@ function BrandMark() {
   );
 }
 
-export function AuthScreen() {
+type AuthScreenProps = {
+  onContinueOffline: () => void;
+  recordingsRoot: string | null;
+};
+
+export function AuthScreen({ onContinueOffline, recordingsRoot }: AuthScreenProps) {
   const { isLoaded } = useAuth();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [oauthBridgeReady, setOauthBridgeReady] = useState(true);
@@ -52,7 +57,6 @@ export function AuthScreen() {
     });
   }, []);
 
-  // Parent ClerkLoadGate already waited for isLoaded; keep a tiny fallback.
   if (!isLoaded) {
     return null;
   }
@@ -70,8 +74,7 @@ export function AuthScreen() {
 
         {!oauthBridgeReady && (
           <div className="auth-banner auth-banner--error">
-            OAuth bridge missing — restart the app. Google/GitHub login will not work until
-            the Electron preload bridge loads.
+            OAuth bridge missing — Google/GitHub may not work. You can still continue offline.
           </div>
         )}
 
@@ -113,6 +116,17 @@ export function AuthScreen() {
               forceRedirectUrl={clerk.afterSignUpUrl}
               appearance={clerkAppearance}
             />
+          )}
+        </div>
+
+        <div className="auth-offline-block">
+          <button type="button" className="auth-retry auth-retry--ghost" onClick={onContinueOffline}>
+            Continue offline — record without signing in
+          </button>
+          {recordingsRoot && (
+            <p className="auth-oauth-redirect">
+              Local saves go to: <code>{recordingsRoot}</code>
+            </p>
           )}
         </div>
 

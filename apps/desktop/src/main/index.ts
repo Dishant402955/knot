@@ -781,6 +781,8 @@ const registerIpc = () => {
 
   ipcMain.handle(IPC.getSessionDir, () => outputDir);
 
+  ipcMain.handle(IPC.getRecordingsRoot, () => recordingsRoot());
+
   ipcMain.handle(IPC.openDashboard, () => {
     void shell.openExternal(dashboardUrl());
   });

@@ -47,6 +47,8 @@ const api = {
 
   getSessionDir: () => ipcRenderer.invoke(IPC.getSessionDir) as Promise<string | null>,
 
+  getRecordingsRoot: () => ipcRenderer.invoke(IPC.getRecordingsRoot) as Promise<string>,
+
   openDashboard: () => ipcRenderer.invoke(IPC.openDashboard),
 
   getApiBaseUrl: () => ipcRenderer.invoke(IPC.getApiBaseUrl) as Promise<string>,

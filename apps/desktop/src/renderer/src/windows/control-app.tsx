@@ -12,6 +12,7 @@ import type {
 import { WEBCAM_SIZES } from "@shared/webcam-utils";
 
 import { CaptureRecorder } from "../lib/capture-recorder";
+import { useDesktopAuth } from "../lib/desktop-auth";
 import { UserProfileMenu } from "./user-profile-menu";
 
 const SHAPES: WebcamShape[] = ["circle", "square", "rectangle"];
@@ -33,6 +34,7 @@ function BrandMark() {
 }
 
 export function ControlApp() {
+  const { mode: authMode, recordingsRoot } = useDesktopAuth();
   const recorderRef = useRef(new CaptureRecorder());
   const busyRef = useRef(false);
   const statusRef = useRef<"idle" | "countdown" | "recording" | "paused">("idle");
@@ -320,8 +322,10 @@ export function ControlApp() {
       setChunkCount(ended.chunkCount ?? 0);
       setMessage(
         ended.outputDir
-          ? `Saved ${ended.chunkCount ?? 0} chunk(s) → ${ended.outputDir}`
-          : "Recording stopped.",
+          ? `Saved ${ended.chunkCount ?? 0} chunk(s) in folder:\n${ended.outputDir}`
+          : recordingsRoot
+            ? `Recording stopped. Files live under:\n${recordingsRoot}`
+            : "Recording stopped.",
       );
       await window.knot.notifyRecordingStopped();
     } catch (error) {
@@ -332,7 +336,7 @@ export function ControlApp() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [resetAfterFailure]);
+  }, [resetAfterFailure, recordingsRoot]);
 
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
@@ -492,10 +496,16 @@ export function ControlApp() {
         </div>
 
         <div className="top-actions">
-          <UserProfileMenu />
+          {authMode === "online" ? (
+            <UserProfileMenu />
+          ) : (
+            <span className="account-chip account-chip--offline">Offline</span>
+          )}
           <button
             className="btn-ghost"
-            onClick={() => void window.knot.openRecordingsFolder(outputDir ?? undefined)}
+            onClick={() =>
+              void window.knot.openRecordingsFolder(outputDir ?? recordingsRoot ?? undefined)
+            }
           >
             Recordings
           </button>
@@ -679,6 +689,25 @@ export function ControlApp() {
             {selectedSource?.name ?? "No source"} · ⌘/Ctrl+Shift+R start/stop · P pause · S
             shot
           </div>
+          {(outputDir || recordingsRoot) && (
+            <button
+              type="button"
+              className="save-path-chip"
+              onClick={() =>
+                void window.knot.openRecordingsFolder(outputDir ?? recordingsRoot ?? undefined)
+              }
+            >
+              {outputDir ? (
+                <>
+                  Session folder: <code>{outputDir}</code>
+                </>
+              ) : (
+                <>
+                  Saves to: <code>{recordingsRoot}</code>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         <div className="action-buttons">
