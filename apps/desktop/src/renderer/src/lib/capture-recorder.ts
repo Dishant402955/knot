@@ -55,6 +55,8 @@ export class CaptureRecorder {
   private composedStream: MediaStream | null = null;
   private recorder: MediaRecorder | null = null;
   private canvas: HTMLCanvasElement | null = null;
+  private screenVideo: HTMLVideoElement | null = null;
+  private webcamVideo: HTMLVideoElement | null = null;
   private animationFrame = 0;
   private chunkIndex = 0;
   private paused = false;
@@ -62,6 +64,8 @@ export class CaptureRecorder {
   private pendingChunks: Promise<void>[] = [];
   private cachedWebcamBounds: WebcamBounds | null = null;
   private frameOrigin: CaptureFrameOrigin = { x: 0, y: 0 };
+  private chunkWatchdog: ReturnType<typeof setInterval> | null = null;
+  private lastChunkAt = 0;
 
   get isRecording() {
     return this.recorder?.state === "recording" || this.recorder?.state === "paused";
@@ -158,15 +162,25 @@ export class CaptureRecorder {
       const screenVideo = document.createElement("video");
       screenVideo.srcObject = this.screenStream;
       screenVideo.muted = true;
+      screenVideo.playsInline = true;
       await screenVideo.play();
+      this.screenVideo = screenVideo;
 
       let webcamVideo: HTMLVideoElement | null = null;
       if (this.webcamStream) {
         webcamVideo = document.createElement("video");
         webcamVideo.srcObject = this.webcamStream;
         webcamVideo.muted = true;
+        webcamVideo.playsInline = true;
         await webcamVideo.play();
+        this.webcamVideo = webcamVideo;
       }
+
+      // Warm up a few painted frames before MediaRecorder starts so the first
+      // timeslice is less likely to be empty.
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
 
       const draw = () => {
         if (!this.canvas || !ctx) {
@@ -246,6 +260,7 @@ export class CaptureRecorder {
       this.recorder.ondataavailable = (event) => {
         if (!event.data || event.data.size === 0 || !this.options) return;
 
+        this.lastChunkAt = Date.now();
         const index = this.chunkIndex++;
         const task = this.options
           .onChunk(index, event.data)
@@ -253,6 +268,9 @@ export class CaptureRecorder {
             this.options?.onError?.(
               error instanceof Error ? error : new Error("Failed to save chunk"),
             );
+          })
+          .finally(() => {
+            this.pendingChunks = this.pendingChunks.filter((item) => item !== task);
           });
         this.pendingChunks.push(task);
       };
@@ -261,7 +279,20 @@ export class CaptureRecorder {
         this.options?.onError?.(new Error("MediaRecorder error — stopping recording"));
       };
 
+      this.lastChunkAt = Date.now();
+      // Timeslice forces periodic chunks (every 5s).
       this.recorder.start(CHUNK_MS);
+
+      // If timeslice stalls, force a flush — but only when overdue.
+      this.chunkWatchdog = setInterval(() => {
+        if (this.recorder?.state !== "recording") return;
+        if (Date.now() - this.lastChunkAt < CHUNK_MS + 1500) return;
+        try {
+          this.recorder.requestData();
+        } catch {
+          // Ignore if recorder is mid-stop.
+        }
+      }, 1000);
     } catch (error) {
       this.cleanup();
       throw error instanceof Error ? error : new Error("Failed to start recording");
@@ -419,6 +450,10 @@ export class CaptureRecorder {
   }
 
   private cleanup() {
+    if (this.chunkWatchdog) {
+      clearInterval(this.chunkWatchdog);
+      this.chunkWatchdog = null;
+    }
     cancelAnimationFrame(this.animationFrame);
     this.animationFrame = 0;
     this.recorder = null;
@@ -426,6 +461,14 @@ export class CaptureRecorder {
     this.screenStream?.getTracks().forEach((t) => t.stop());
     this.webcamStream?.getTracks().forEach((t) => t.stop());
     this.micStream?.getTracks().forEach((t) => t.stop());
+    if (this.screenVideo) {
+      this.screenVideo.srcObject = null;
+      this.screenVideo = null;
+    }
+    if (this.webcamVideo) {
+      this.webcamVideo.srcObject = null;
+      this.webcamVideo = null;
+    }
     this.composedStream = null;
     this.screenStream = null;
     this.webcamStream = null;

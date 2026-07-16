@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { ControlApp } from "./windows/control-app";
+import { ControlRoot } from "./windows/control-root";
 import { WebcamApp } from "./windows/webcam-app";
 import { IndicatorApp } from "./windows/indicator-app";
 import { CountdownApp } from "./windows/countdown-app";
@@ -21,7 +21,7 @@ const App =
         ? CountdownApp
         : windowName === "region"
           ? RegionApp
-          : ControlApp;
+          : ControlRoot;
 
 const root = createRoot(document.getElementById("root")!);
 

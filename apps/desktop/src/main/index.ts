@@ -30,11 +30,41 @@ import {
 } from "../shared/types";
 import { resolveRecordingsPath, resolveSessionDir } from "../shared/paths";
 import { normalizeWebcamBounds } from "../shared/webcam-utils";
+import {
+  applyClerkContentSecurityPolicy,
+  cleanupClerkBridge,
+  controlWindowUrl,
+  ensureSingleInstance,
+  initClerkBridge,
+  knotApiBaseUrl,
+  knotDashboardUrl,
+  registerKnotProtocol,
+} from "./clerk";
 
 const isDev = !app.isPackaged;
 
-const dashboardUrl = () =>
-  process.env["KNOT_DASHBOARD_URL"] ?? "http://localhost:3000/dashboard";
+const gotSingleInstanceLock = ensureSingleInstance(() => {
+  const focus = () => {
+    const win = ensureControlWindow();
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  };
+
+  if (app.isReady()) {
+    focus();
+  } else {
+    void app.whenReady().then(focus);
+  }
+});
+
+if (!gotSingleInstanceLock) {
+  // Second instance — quit. OAuth knot:// callbacks are delivered to the first instance.
+} else {
+  initClerkBridge();
+}
+
+const dashboardUrl = () => knotDashboardUrl();
 
 let tray: Tray | null = null;
 let controlWindow: BrowserWindow | null = null;
@@ -204,6 +234,10 @@ const rendererUrl = (windowName: string) => {
   return `file://${join(__dirname, "../renderer/index.html")}?window=${windowName}`;
 };
 
+const loadControlWindow = (win: BrowserWindow) => {
+  void win.loadURL(controlWindowUrl());
+};
+
 const loadWindow = (win: BrowserWindow, windowName: string) => {
   if (isDev && process.env["ELECTRON_RENDERER_URL"]) {
     void win.loadURL(rendererUrl(windowName));
@@ -310,7 +344,7 @@ const ensureControlWindow = () => {
     },
   });
 
-  loadWindow(controlWindow, "control");
+  loadControlWindow(controlWindow);
 
   controlWindow.once("ready-to-show", () => {
     controlWindow?.show();
@@ -713,10 +747,20 @@ const registerIpc = () => {
 
       await mkdir(dir, { recursive: true });
       const filePath = join(dir, `chunk-${String(payload.index).padStart(4, "0")}.webm`);
-      const data = Buffer.from(payload.buffer);
+      const data = Buffer.from(new Uint8Array(payload.buffer));
+
+      if (data.byteLength === 0) {
+        throw new Error("Refusing to write empty chunk");
+      }
+
       await writeFile(filePath, data);
       chunkCount = Math.max(chunkCount, payload.index + 1);
-      await writeSessionManifest(dir, { chunkCount, state: "recording" });
+      await writeSessionManifest(dir, {
+        chunkCount,
+        state: "recording",
+        lastChunkIndex: payload.index,
+        lastChunkBytes: data.byteLength,
+      });
       broadcast(IPC.updateIndicator, getStatusPayload());
       return { path: filePath, size: data.byteLength };
     },
@@ -740,6 +784,8 @@ const registerIpc = () => {
   ipcMain.handle(IPC.openDashboard, () => {
     void shell.openExternal(dashboardUrl());
   });
+
+  ipcMain.handle(IPC.getApiBaseUrl, () => knotApiBaseUrl());
 
   ipcMain.handle(IPC.openRecordingsFolder, async (_event, dir?: string) => {
     const target = resolveRecordingsPath(recordingsRoot(), dir);
@@ -952,7 +998,12 @@ const registerIpc = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return;
+
+  await registerKnotProtocol();
+  applyClerkContentSecurityPolicy();
+
   if (!existsSync(recordingsRoot())) {
     void mkdir(recordingsRoot(), { recursive: true });
   }
@@ -971,6 +1022,7 @@ app.on("will-quit", () => {
   clearStatusTick();
   globalShortcut.unregisterAll();
   destroyOverlayWindows();
+  cleanupClerkBridge();
 });
 
 app.on("window-all-closed", () => {

@@ -13,9 +13,13 @@
     "lint": "echo \"no lint configured\""
   },
   "dependencies": {
+    "@clerk/electron": "^0.0.14",
+    "@clerk/react": "^6.12.4",
     "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
     "@fontsource/ibm-plex-mono": "^5.2.7",
+    "dotenv": "^17.4.2",
+    "electron-store": "^8.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

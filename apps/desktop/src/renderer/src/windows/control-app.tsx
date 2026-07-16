@@ -12,6 +12,7 @@ import type {
 import { WEBCAM_SIZES } from "@shared/webcam-utils";
 
 import { CaptureRecorder } from "../lib/capture-recorder";
+import { UserProfileMenu } from "./user-profile-menu";
 
 const SHAPES: WebcamShape[] = ["circle", "square", "rectangle"];
 
@@ -35,6 +36,7 @@ export function ControlApp() {
   const recorderRef = useRef(new CaptureRecorder());
   const busyRef = useRef(false);
   const statusRef = useRef<"idle" | "countdown" | "recording" | "paused">("idle");
+  const sessionIdRef = useRef<string | null>(null);
   const [mode, setMode] = useState<CaptureMode>("screen");
   const [sources, setSources] = useState<DesktopSource[]>([]);
   const [sourceId, setSourceId] = useState<string | null>(null);
@@ -50,6 +52,7 @@ export function ControlApp() {
     "idle",
   );
   const [chunkCount, setChunkCount] = useState(0);
+  const [lastChunkBytes, setLastChunkBytes] = useState(0);
   const [outputDir, setOutputDir] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -202,8 +205,10 @@ export function ControlApp() {
       }
 
       const session = await window.knot.startSession();
+      sessionIdRef.current = session.sessionId;
       setOutputDir(session.outputDir);
       setChunkCount(0);
+      setLastChunkBytes(0);
       setStatus("countdown");
 
       await window.knot.hideControl();
@@ -250,14 +255,18 @@ export function ControlApp() {
         sessionId: session.sessionId,
         getWebcamBounds: () => window.knot.getWebcamBounds(),
         onChunk: async (index, blob) => {
+          if (blob.size === 0) return;
+
           const buffer = await blob.arrayBuffer();
+          const activeSessionId = sessionIdRef.current ?? session.sessionId;
           const saved = await window.knot.saveChunk({
-            sessionId: session.sessionId,
+            sessionId: activeSessionId,
             index,
             buffer,
           });
-          setChunkCount(index + 1);
-          setMessage(`Chunk ${index + 1} saved (${saved.size} bytes)`);
+          setChunkCount((prev) => Math.max(prev, index + 1));
+          setLastChunkBytes(saved.size);
+          setMessage(`Chunk ${index + 1} · ${(saved.size / 1024).toFixed(0)} KB → disk`);
         },
         onError: (error) => {
           setMessage(error.message);
@@ -307,6 +316,7 @@ export function ControlApp() {
       await window.knot.showControl();
       setStatus("idle");
       setElapsedMs(0);
+      sessionIdRef.current = null;
       setChunkCount(ended.chunkCount ?? 0);
       setMessage(
         ended.outputDir
@@ -470,16 +480,19 @@ export function ControlApp() {
                 <span>·</span>
                 <span>{formatElapsed(elapsedMs)}</span>
                 <span>·</span>
-                <span>{chunkCount} chunks</span>
+                <span>
+                  {chunkCount} chunk{chunkCount === 1 ? "" : "s"}
+                  {lastChunkBytes > 0
+                    ? ` · last ${(lastChunkBytes / 1024).toFixed(0)} KB`
+                    : ""}
+                </span>
               </>
             )}
           </div>
         </div>
 
         <div className="top-actions">
-          <button className="btn-ghost" onClick={() => void window.knot.openDashboard()}>
-            Dashboard
-          </button>
+          <UserProfileMenu />
           <button
             className="btn-ghost"
             onClick={() => void window.knot.openRecordingsFolder(outputDir ?? undefined)}

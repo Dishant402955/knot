@@ -73,6 +73,7 @@ export const IPC = {
   endSession: "desktop:end-session",
   getSessionDir: "desktop:get-session-dir",
   openDashboard: "desktop:open-dashboard",
+  getApiBaseUrl: "desktop:get-api-base-url",
   openRecordingsFolder: "desktop:open-recordings-folder",
   showControl: "desktop:show-control",
   hideControl: "desktop:hide-control",

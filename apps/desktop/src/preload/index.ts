@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { exposeClerkBridge } from "@clerk/electron/preload";
 
 import {
   IPC,
@@ -47,6 +48,8 @@ const api = {
   getSessionDir: () => ipcRenderer.invoke(IPC.getSessionDir) as Promise<string | null>,
 
   openDashboard: () => ipcRenderer.invoke(IPC.openDashboard),
+
+  getApiBaseUrl: () => ipcRenderer.invoke(IPC.getApiBaseUrl) as Promise<string>,
 
   openRecordingsFolder: (dir?: string) => ipcRenderer.invoke(IPC.openRecordingsFolder, dir),
 
@@ -145,3 +148,5 @@ export type KnotDesktopApi = typeof api & {
 };
 
 contextBridge.exposeInMainWorld("knot", api);
+
+exposeClerkBridge();
