@@ -28,7 +28,9 @@ export type RecorderOptions = {
 };
 
 /** Target length of each independently playable segment. */
-const SEGMENT_MS = 5000;
+export const SEGMENT_MS = 5000;
+/** Approximate duration written to the API when a segment registers. */
+export const SEGMENT_DURATION_SECONDS = Math.round(SEGMENT_MS / 1000);
 /** Overlap between consecutive recorders so the seam doesn't drop frames. */
 const SEGMENT_OVERLAP_MS = 150;
 /** Wait after requestData() so the encoder can flush before stop(). */

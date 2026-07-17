@@ -12,7 +12,12 @@ import type {
 import { WEBCAM_SIZES } from "@shared/webcam-utils";
 
 import { CaptureRecorder } from "../lib/capture-recorder";
+import { useCloudApi } from "../lib/cloud-api";
 import { useDesktopAuth } from "../lib/desktop-auth";
+import {
+  formatUploadError,
+  RecordingUploadSession,
+} from "../lib/recording-upload";
 import { UserProfileMenu } from "./user-profile-menu";
 
 const SHAPES: WebcamShape[] = ["circle", "square", "rectangle"];
@@ -35,10 +40,12 @@ function BrandMark() {
 
 export function ControlApp() {
   const { mode: authMode, recordingsRoot } = useDesktopAuth();
+  const cloudApi = useCloudApi();
   const recorderRef = useRef(new CaptureRecorder());
   const busyRef = useRef(false);
   const statusRef = useRef<"idle" | "countdown" | "recording" | "paused">("idle");
   const sessionIdRef = useRef<string | null>(null);
+  const uploadSessionRef = useRef<RecordingUploadSession | null>(null);
   /** Bumped on cancel/failure so in-flight startRecording cannot resume as recording. */
   const startEpochRef = useRef(0);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -59,6 +66,7 @@ export function ControlApp() {
   );
   const [outputDir, setOutputDir] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const writeCountRef = useRef(0);
 
@@ -212,10 +220,23 @@ export function ControlApp() {
   const resetAfterFailure = useCallback(async () => {
     startEpochRef.current += 1;
 
+    const abandoned = uploadSessionRef.current;
+    uploadSessionRef.current = null;
+    setShareUrl(null);
+
     try {
       await recorderRef.current.stop();
     } catch {
       // Recorder may not have started.
+    }
+
+    // After stop so any last onChunk can enqueue, then flush + mark FAILED.
+    if (abandoned) {
+      try {
+        await abandoned.finalize("FAILED");
+      } catch {
+        // Best-effort; local teardown continues.
+      }
     }
 
     await window.knot.hideIndicator();
@@ -265,6 +286,8 @@ export function ControlApp() {
     busyRef.current = true;
     setBusy(true);
     setMessage(null);
+    setShareUrl(null);
+    uploadSessionRef.current = null;
 
     const epoch = ++startEpochRef.current;
     const stillCurrent = () => epoch === startEpochRef.current;
@@ -310,6 +333,19 @@ export function ControlApp() {
 
       // Warm capture in the background while the countdown runs, so encoding
       // can start the instant the center timer hits 0 (no post-countdown delay).
+      // Cloud session is also created during countdown so share URL is ready.
+      const cloudPromise =
+        cloudApi && authMode === "online"
+          ? (async () => {
+              const upload = new RecordingUploadSession(
+                cloudApi.json,
+                cloudApi.fetch,
+              );
+              await upload.start(`Recording ${new Date().toLocaleString()}`);
+              return upload;
+            })()
+          : null;
+
       const preparePromise = (async () => {
         if (includeWebcam && mode === "screen") {
           await window.knot.showWebcam(webcamShape);
@@ -349,6 +385,25 @@ export function ControlApp() {
               buffer,
             });
             writeCountRef.current = Math.max(writeCountRef.current, index + 1);
+
+            const upload = uploadSessionRef.current;
+            if (upload) {
+              try {
+                const link = await upload.enqueueChunk(index, blob);
+                if (link) setShareUrl(link);
+                setMessage(
+                  index === 0 && link
+                    ? `Live · chunk 1 uploaded · ${(saved.size / 1024).toFixed(0)} KB`
+                    : `Chunk ${index + 1} uploaded · ${(saved.size / 1024).toFixed(0)} KB`,
+                );
+              } catch (uploadError) {
+                setMessage(
+                  `Chunk ${index + 1} saved locally · cloud: ${formatUploadError(uploadError)}`,
+                );
+              }
+              return;
+            }
+
             setMessage(`Chunk ${index + 1} · ${(saved.size / 1024).toFixed(0)} KB`);
           },
           onError: (error) => {
@@ -367,6 +422,10 @@ export function ControlApp() {
         const countdownResult = await window.knot.runCountdown(countdownSeconds);
         if (!countdownResult.completed || !stillCurrent() || phase() !== "countdown") {
           void preparePromise.catch(() => undefined);
+          void cloudPromise?.then(
+            (upload) => upload.finalize("FAILED").catch(() => undefined),
+            () => undefined,
+          );
           try {
             await recorderRef.current.stop();
           } catch {
@@ -379,8 +438,48 @@ export function ControlApp() {
       try {
         await preparePromise;
       } catch (prepareError) {
+        void cloudPromise?.then(
+          (upload) => upload.finalize("FAILED").catch(() => undefined),
+          () => undefined,
+        );
         if (!stillCurrent()) return;
         throw prepareError;
+      }
+
+      if (!stillCurrent() || phase() !== "countdown") {
+        void cloudPromise?.then(
+          (upload) => upload.finalize("FAILED").catch(() => undefined),
+          () => undefined,
+        );
+        try {
+          await recorderRef.current.stop();
+        } catch {
+          // Ignore.
+        }
+        return;
+      }
+
+      if (cloudPromise) {
+        try {
+          const upload = await cloudPromise;
+          if (!stillCurrent() || phase() !== "countdown") {
+            void upload.finalize("FAILED").catch(() => undefined);
+            try {
+              await recorderRef.current.stop();
+            } catch {
+              // Ignore.
+            }
+            return;
+          }
+          uploadSessionRef.current = upload;
+          setShareUrl(upload.link);
+        } catch (cloudError) {
+          if (!stillCurrent()) return;
+          uploadSessionRef.current = null;
+          setMessage(
+            `Will record locally · cloud unavailable: ${formatUploadError(cloudError)}`,
+          );
+        }
       }
 
       if (!stillCurrent() || phase() !== "countdown") {
@@ -396,7 +495,14 @@ export function ControlApp() {
       recorderRef.current.commit();
       await window.knot.setRecordingState("recording");
       setStatus("recording");
-      setMessage(`Recording → ${session.outputDir}`);
+
+      const link = uploadSessionRef.current?.link ?? null;
+      if (link) {
+        setShareUrl(link);
+        setMessage(`Recording · share ready → ${link}`);
+      } else if (!cloudApi || authMode !== "online") {
+        setMessage(`Recording → ${session.outputDir}`);
+      }
 
       const live = recorderRef.current.getLiveStream();
       if (live && previewVideoRef.current) {
@@ -423,6 +529,8 @@ export function ControlApp() {
     webcamSize,
     resetAfterFailure,
     stopLivePreview,
+    cloudApi,
+    authMode,
   ]);
 
   const stopRecordingRef = useRef<(() => Promise<void>) | null>(null);
@@ -433,11 +541,39 @@ export function ControlApp() {
     busyRef.current = true;
     setBusy(true);
 
+    const upload = uploadSessionRef.current;
+
     try {
       await recorderRef.current.stop();
       const ended = await window.knot.endSession();
       await window.knot.setRecordingState("idle");
       await window.knot.hideIndicator();
+
+      let finalShare = upload?.link ?? shareUrl;
+      let finalizeFailedMessage: string | null = null;
+      let cloudMarkedFailed = upload?.hasFailed ?? false;
+
+      if (upload) {
+        try {
+          setMessage("Finishing upload…");
+          // Prefer READY when any chunk landed; FAILED only if none did.
+          const status = upload.finalizeStatus;
+          finalShare = (await upload.finalize(status)) ?? finalShare;
+          if (finalShare) setShareUrl(finalShare);
+          cloudMarkedFailed = status === "FAILED";
+        } catch (finalizeError) {
+          finalizeFailedMessage = formatUploadError(finalizeError);
+          // Capture already ended — don't leave the row stuck in RECORDING.
+          try {
+            await upload.finalize("FAILED");
+            cloudMarkedFailed = true;
+            finalizeFailedMessage = null;
+          } catch (retryError) {
+            finalizeFailedMessage = formatUploadError(retryError);
+            cloudMarkedFailed = true;
+          }
+        }
+      }
 
       if (includeWebcam) {
         await window.knot.showWebcam(webcamShape);
@@ -448,14 +584,30 @@ export function ControlApp() {
       setStatus("idle");
       setElapsedMs(0);
       sessionIdRef.current = null;
+      uploadSessionRef.current = null;
       writeCountRef.current = 0;
-      setMessage(
-        ended.outputDir
-          ? `Saved → ${ended.outputDir}\nEach chunk-*.webm plays on its own.`
-          : recordingsRoot
-            ? `Recording saved under:\n${recordingsRoot}`
-            : "Recording stopped.",
-      );
+
+      const localLine = ended.outputDir
+        ? `Saved → ${ended.outputDir}`
+        : recordingsRoot
+          ? `Saved under ${recordingsRoot}`
+          : "Recording stopped.";
+
+      if (finalizeFailedMessage) {
+        setMessage(
+          `${localLine}\nCloud status update failed (may still show as recording): ${finalizeFailedMessage}`,
+        );
+      } else if (cloudMarkedFailed) {
+        setMessage(
+          finalShare
+            ? `${localLine}\nCloud upload incomplete — early chunks may still play:\n${finalShare}`
+            : `${localLine}\nCloud upload incomplete.`,
+        );
+      } else if (finalShare) {
+        setMessage(`${localLine}\nWatch: ${finalShare}`);
+      } else {
+        setMessage(`${localLine}\nEach chunk-*.webm plays on its own.`);
+      }
       stopLivePreview();
       if (sourceId && mode !== "region") {
         void startLivePreview(sourceId);
@@ -469,7 +621,18 @@ export function ControlApp() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [resetAfterFailure, recordingsRoot, includeWebcam, webcamShape, webcamSize, sourceId, mode, startLivePreview, stopLivePreview]);
+  }, [
+    resetAfterFailure,
+    recordingsRoot,
+    includeWebcam,
+    webcamShape,
+    webcamSize,
+    sourceId,
+    mode,
+    startLivePreview,
+    stopLivePreview,
+    shareUrl,
+  ]);
 
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
@@ -608,6 +771,15 @@ export function ControlApp() {
     return `${m}:${s}`;
   };
 
+  const copyShareLink = useCallback(async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setMessage("Share link copied.");
+    } catch {
+      setMessage(`Copy failed — ${shareUrl}`);
+    }
+  }, [shareUrl]);
 
   const isLive = status === "recording" || status === "paused";
 
@@ -822,6 +994,24 @@ export function ControlApp() {
             {message ??
               `${selectedSource?.name ?? "No source"} · Ctrl+Shift+R record · S shot`}
           </div>
+          {shareUrl && (
+            <div className="share-strip">
+              <span className="share-strip-label">Share</span>
+              <code className="share-strip-url" title={shareUrl}>
+                {shareUrl}
+              </code>
+              <button type="button" className="btn-ghost share-strip-copy" onClick={() => void copyShareLink()}>
+                Copy
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => void window.knot.openExternalUrl(shareUrl)}
+              >
+                Open
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="action-buttons">

@@ -2,7 +2,7 @@
 
 Electron recorder for Knot — screen/window/region capture, webcam overlay, and independently playable ~5s WebM chunks saved locally. **Clerk auth** uses the **same env vars** as `apps/web` (Next.js).
 
-## Features (Phase A+)
+## Features
 
 - Source picker: full screen, window, or region
 - Microphone + optional system audio
@@ -14,7 +14,8 @@ Electron recorder for Knot — screen/window/region capture, webcam overlay, and
 - Global shortcuts: `Ctrl/⌘+Shift+R`, `Ctrl/⌘+Shift+P`, `Ctrl/⌘+Shift+S`
 - **Sign in / sign up** — same Clerk application as the Next.js dashboard
 - **Secure session storage** — tokens encrypted with OS keychain (`@clerk/electron`)
-- **Authenticated API client** — `useKnotApi()` calls `KNOT_WEB_APP_URL` (default `http://localhost:3000`)
+- **Live cloud upload** — while signed in, chunks upload during capture via Next.js → B2
+- **Share link** — watch URL appears as soon as the recording session is created (playable after chunk 0)
 - **Continue offline** — record without signing in (local files only)
 
 ## Recording flow
@@ -25,7 +26,9 @@ Order of operations when you press **Record**:
 2. Control window is parked off-screen (recorder lives there; it is not `hide()`n).
 3. Capture is **prepared in parallel** (desktop/mic/cam streams + canvas) while the countdown runs.
 4. **Center countdown** starts only after the tray is fully ready.
-5. When the timer hits **0**, encoding **commits immediately** and the tray switches to `recording` (no post-countdown setup delay).
+5. When the timer hits **0**, encoding **commits immediately** (cloud session was already created during countdown if signed in), and the tray switches to `recording`.
+6. Each ~5s chunk is saved locally and uploaded (presigned PUT → register segment) while capture continues.
+7. On **Stop**, pending uploads flush and the video is marked `READY` (or `FAILED` if uploads broke).
 
 ### Chunks on disk
 
@@ -39,6 +42,22 @@ Each session folder under the app user-data `recordings/` directory contains:
 How chunks stay playable: the app **rotates `MediaRecorder`** on the same live stream (overlap + encoder flush), instead of using timeslice blobs (those lack a WebM header after the first slice and do not play alone).
 
 Open any `chunk-*.webm` in a player. There is no single appended `recording.webm` — that approach broke independent playback.
+
+### Cloud upload (signed-in)
+
+Requires `apps/web` running with B2 env vars. The **API host** must reach Backblaze B2.
+
+Chunks are uploaded with `PUT /api/videos/:id/segments/:index` (bytes go to Next.js; Next writes to B2). Desktop does **not** talk to B2 directly.
+
+If the API runs on a machine where Cisco Umbrella blocks B2, uploads still fail — point `KNOT_WEB_APP_URL` at a cloud-hosted Knot web app, or allowlist `*.backblazeb2.com` for that host.
+
+| Step | Endpoint |
+|------|----------|
+| Create session | `POST /api/videos` |
+| Upload chunk | `PUT /api/videos/:id/segments/:index` |
+| Finish | `PATCH /api/videos/:id` `{ status: "READY" }` |
+
+Share URL format: `{KNOT_WEB_APP_URL}/watch/{videoId}` (also returned as `NEXT_PUBLIC_APP_URL` from the API).
 
 ## Auth setup
 

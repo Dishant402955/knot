@@ -53,6 +53,21 @@ const api = {
 
   openDashboard: () => ipcRenderer.invoke(IPC.openDashboard),
 
+  openExternalUrl: (url: string) =>
+    ipcRenderer.invoke(IPC.openExternalUrl, url) as Promise<boolean>,
+
+  /** Upload bytes via main process (no browser CORS). */
+  putToUrl: (payload: {
+    url: string;
+    contentType: string;
+    buffer: ArrayBuffer;
+  }) =>
+    ipcRenderer.invoke(IPC.putToUrl, payload) as Promise<{
+      ok: boolean;
+      status: number;
+      body: string;
+    }>,
+
   getApiBaseUrl: () => ipcRenderer.invoke(IPC.getApiBaseUrl) as Promise<string>,
 
   openRecordingsFolder: (dir?: string) => ipcRenderer.invoke(IPC.openRecordingsFolder, dir),

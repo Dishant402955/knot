@@ -1,6 +1,7 @@
 import { ClerkProvider, useAuth } from "@clerk/electron/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { CloudApiProvider } from "@/lib/cloud-api";
 import { getRendererClerkEnv } from "@/lib/clerk-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import {
@@ -137,7 +138,11 @@ function ControlGate({
     );
   }
 
-  return <ControlApp />;
+  return (
+    <CloudApiProvider>
+      <ControlApp />
+    </CloudApiProvider>
+  );
 }
 
 function OfflineRecorder({

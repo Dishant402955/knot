@@ -43,11 +43,14 @@ export async function knotFetch(
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new KnotApiError(
-      body || `Request failed (${response.status})`,
-      response.status,
-      body,
-    );
+    let message = body || `Request failed (${response.status})`;
+    try {
+      const parsed = JSON.parse(body) as { message?: string };
+      if (parsed.message) message = parsed.message;
+    } catch {
+      // keep raw body
+    }
+    throw new KnotApiError(message, response.status, body);
   }
 
   return response;

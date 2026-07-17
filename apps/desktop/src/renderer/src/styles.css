@@ -1149,6 +1149,39 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.share-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.share-strip-label {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ice);
+}
+
+.share-strip-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  background: transparent;
+}
+
+.share-strip-copy {
+  flex-shrink: 0;
+}
+
 .action-buttons {
   display: flex;
   align-items: center;

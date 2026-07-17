@@ -932,6 +932,81 @@ const registerIpc = () => {
     void shell.openExternal(dashboardUrl());
   });
 
+  ipcMain.handle(IPC.openExternalUrl, (_event, url: string) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return false;
+      }
+      void shell.openExternal(parsed.toString());
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle(
+    IPC.putToUrl,
+    async (
+      _event,
+      payload: { url: string; contentType: string; buffer: ArrayBuffer },
+    ) => {
+      try {
+        const parsed = new URL(payload.url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          return { ok: false, status: 0, body: "Invalid upload URL protocol." };
+        }
+
+        // Only allow Knot API origin (legacy direct-B2 uploads are retired).
+        const apiBase = knotApiBaseUrl();
+        let allowedOrigin: string;
+        try {
+          allowedOrigin = new URL(apiBase).origin;
+        } catch {
+          return { ok: false, status: 0, body: "Invalid API base URL." };
+        }
+        if (parsed.origin !== allowedOrigin) {
+          return {
+            ok: false,
+            status: 0,
+            body: `Upload host not allowed (expected ${allowedOrigin}).`,
+          };
+        }
+
+        if (payload.buffer.byteLength > 64 * 1024 * 1024) {
+          return { ok: false, status: 0, body: "Upload exceeds 64MB limit." };
+        }
+
+        const response = await fetch(payload.url, {
+          method: "PUT",
+          headers: {
+            "Content-Type": payload.contentType || "application/octet-stream",
+          },
+          body: Buffer.from(payload.buffer),
+        });
+
+        const body = await response.text().catch(() => "");
+        if (!response.ok) {
+          console.error(
+            `[knot] PUT failed ${response.status}:`,
+            body.slice(0, 300),
+          );
+          return {
+            ok: false,
+            status: response.status,
+            body: body.slice(0, 500),
+          };
+        }
+
+        return { ok: true, status: response.status, body: "" };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[knot] PUT error:", message);
+        return { ok: false, status: 0, body: message };
+      }
+    },
+  );
+
   ipcMain.handle(IPC.getApiBaseUrl, () => knotApiBaseUrl());
 
   ipcMain.handle(IPC.openRecordingsFolder, async (_event, dir?: string) => {

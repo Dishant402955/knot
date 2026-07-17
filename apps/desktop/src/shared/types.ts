@@ -75,6 +75,9 @@ export const IPC = {
   getSessionDir: "desktop:get-session-dir",
   getRecordingsRoot: "desktop:get-recordings-root",
   openDashboard: "desktop:open-dashboard",
+  openExternalUrl: "desktop:open-external-url",
+  /** Main-process PUT (avoids renderer CORS to B2). */
+  putToUrl: "desktop:put-to-url",
   getApiBaseUrl: "desktop:get-api-base-url",
   openRecordingsFolder: "desktop:open-recordings-folder",
   showControl: "desktop:show-control",

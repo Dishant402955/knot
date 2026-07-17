@@ -34,7 +34,7 @@ flowchart TB
     Web -->|progressive signed URLs| B2
 ```
 
-**Key idea:** Next.js is the single backend for both clients. Video bytes never pass through Next.js — the desktop app uploads chunks **directly** to B2, and the web app plays them back **directly** from B2 using short-lived signed URLs.
+**Key idea:** Next.js is the single backend for both clients. Desktop uploads chunk **bytes to Next.js**; the API writes them to B2 with server credentials. The web app plays them back from B2 using short-lived signed GET URLs. Clients never need direct write access to B2 (important behind corporate filters).
 
 ### Monorepo layout
 
@@ -42,7 +42,7 @@ flowchart TB
 knot/
 ├── apps/
 │   ├── web/          # Next.js — marketing, dashboard, API (the only app today)
-│   └── desktop/      # Electron — capture + Clerk (Phase A+); upload planned
+│   └── desktop/      # Electron — capture + Clerk + live B2 upload
 ├── packages/         # Shared ESLint & TypeScript configs
 └── docs/             # This documentation
 ```
@@ -54,7 +54,7 @@ Managed with **pnpm workspaces** + **Turborepo**.
 | Layer | Choice |
 |-------|--------|
 | Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui |
-| Desktop | Electron (`apps/desktop`, Phase A+) |
+| Desktop | Electron (`apps/desktop`) — capture, Clerk, live upload |
 | Auth | Clerk |
 | Database | PostgreSQL via Drizzle ORM (Neon driver) |
 | Storage | Backblaze B2 (S3-compatible API) |
@@ -82,10 +82,9 @@ sequenceDiagram
     API-->>D: videoId + shareUrl
 
     loop Every 3–5s while recording
-        D->>API: POST /api/videos/:id/upload-url
-        API-->>D: presigned PUT URL + storageKey
-        D->>B2: PUT chunk (direct)
-        D->>API: POST /api/videos/:id/segments (register)
+        D->>API: PUT /api/videos/:id/segments/:index (bytes)
+        API->>B2: PutObject
+        API-->>D: segment registered
     end
 
     Note over V: Viewer opens link once chunk 0 exists
@@ -156,7 +155,7 @@ Route: `/watch/[videoId]` (or short link `/r/[slug]`).
 
 ## 4. Desktop App (`apps/desktop`)
 
-Primary capture surface. **Phase A+ (local capture + Clerk)** is implemented; cloud upload comes next.
+Primary capture surface. Local capture, Clerk auth, and **live chunk upload** are implemented.
 
 | Module | Status | Responsibility |
 |--------|--------|----------------|
@@ -166,13 +165,13 @@ Primary capture surface. **Phase A+ (local capture + Clerk)** is implemented; cl
 | Audio | Done | Mic + optional system/desktop audio |
 | Controls | Done | Countdown (after indicator ready), prepare-during-countdown, instant commit at 0, pause / resume / stop, screenshot |
 | Auth | Done | `@clerk/electron`, OS keychain tokens, same Clerk app as web, `knot://app/` OAuth |
-| Upload | Not started | Presigned PUT per chunk → B2 → register segment during recording |
+| Upload | Done | Chunks `PUT` to Next.js → server `PutObject` to B2 → register; share `/watch` URL; `READY`/`FAILED` on stop |
 
 **Capture notes:** VP8/VP9 WebM; each `chunk-NNNN.webm` is a complete file (not timeslice fragments). Written under Electron `userData/recordings/<sessionId>/`.
 
 **Capture modes:** full screen, window, region, and single-frame screenshot (PNG).
 
-**Record sequence:** indicator ready → countdown (capture prepares in parallel) → encode starts at 0.
+**Record sequence:** indicator ready → countdown (capture prepare + cloud session in parallel) → encode starts at 0 → chunks upload while recording → finalize on stop.
 
 Run: `pnpm --filter desktop dev` (see `apps/desktop/README.md`).
 ---
@@ -183,7 +182,7 @@ Accessed via the S3-compatible API (`@aws-sdk/client-s3`).
 
 | Operation | Flow |
 |-----------|------|
-| Upload | Next.js returns a presigned PUT URL (~15 min TTL) scoped to one object key; client PUTs directly to B2. |
+| Upload | Desktop sends chunk bytes to Next.js; server `PutObject` to B2 (no client write to B2). |
 | Playback | Next.js returns signed GET URLs after visibility checks; client GETs directly from B2. |
 
 **Object key convention:**
@@ -193,7 +192,9 @@ Accessed via the S3-compatible API (`@aws-sdk/client-s3`).
 {userId}/{videoId}/thumbnail.jpg
 ```
 
-Credentials (`B2_KEY_ID`, `B2_APPLICATION_KEY`) are **server-only**. Clients never see bucket secrets. A prototype upload script exists at `apps/web/server-actions/b2.ts` (not yet productized).
+Credentials (`B2_KEY_ID`, `B2_APPLICATION_KEY`) are **server-only**. Clients never see bucket secrets. Helpers: `apps/web/lib/b2.ts`.
+
+**Network note:** The **API host** must reach B2. A laptop behind Cisco Umbrella that blocks `*.backblazeb2.com` cannot use a *local* Next.js as upload egress — deploy the API (or allowlist B2). Desktop never needs B2 allowlisted.
 
 ---
 
@@ -218,15 +219,27 @@ Single identity provider for web and desktop.
 | `PUBLIC` | Anyone with the link |
 | `AUTHENTICATED` | Any signed-in Clerk user |
 
-Default on create: `PRIVATE`. Visibility is checked **before** any signed B2 URL is issued — including for videos still in `RECORDING`.
+Default on **dashboard** create: `PRIVATE`. Desktop recording sessions (`POST /api/videos`) default to `PUBLIC` so the share link is immediately watchable without forcing sign-in. Visibility is checked **before** any signed B2 URL is issued — including for videos still in `RECORDING`.
+
+### Desktop API (route handlers)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/videos` | Start recording session (`RECORDING`), return `shareUrl` |
+| `PUT` | `/api/videos/:id/segments/:index` | Upload chunk bytes → B2 PutObject → register |
+| `POST` | `/api/videos/:id/upload-url` | Legacy presigned B2 PUT (avoid; firewall-fragile) |
+| `POST` | `/api/videos/:id/segments` | Legacy register-only (prefer atomic PUT above) |
+| `PATCH` | `/api/videos/:id` | Status transitions (`READY` requires ≥1 segment) |
+
+Routes require Clerk auth (session cookie or `Authorization: Bearer`). CORS allows Electron origin `knot://app` including `PUT`.
 
 ### Security boundaries
 
 | Layer | Mechanism |
 |-------|-----------|
 | Route protection | `clerkMiddleware` in `proxy.ts` on `/dashboard/*` and `/api/*` |
-| Mutations | `currentUser()` guard; verify `video.userId === user.id` |
-| Uploads | Short-lived presigned PUT URLs scoped to one key |
+| Mutations | `currentUser()` / `auth()` guard; verify `video.userId === user.id` |
+| Uploads | Chunk body → API → PutObject; short-lived signed GET for playback |
 | Reads | Signed GET URLs issued only after visibility checks |
 | Private IDs | Return 404 (not 403) to avoid enumeration |
 

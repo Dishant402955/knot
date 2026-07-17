@@ -8,6 +8,11 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+  // Electron preflight must not hit Clerk protect.
+  if (req.method === "OPTIONS") {
+    return;
+  }
+
   if (!isPublicRoute(req)) {
     await auth.protect();
   }

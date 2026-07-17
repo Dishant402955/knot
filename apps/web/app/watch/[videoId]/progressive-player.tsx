@@ -12,6 +12,20 @@ type ProgressivePlayerProps = {
   initialSegments: WatchSegment[];
 };
 
+/** Merge polls without replacing URLs for indices we already have (avoids reload). */
+const mergeSegments = (
+  prev: WatchSegment[],
+  next: WatchSegment[],
+): WatchSegment[] => {
+  const byIndex = new Map(prev.map((s) => [s.index, s]));
+  for (const segment of next) {
+    if (!byIndex.has(segment.index)) {
+      byIndex.set(segment.index, segment);
+    }
+  }
+  return [...byIndex.values()].sort((a, b) => a.index - b.index);
+};
+
 const ProgressivePlayer = ({
   videoId,
   title,
@@ -23,6 +37,7 @@ const ProgressivePlayer = ({
   const segmentsRef = useRef(initialSegments);
   const indexRef = useRef(0);
   const wantPlayRef = useRef(false);
+  const loadedIndexRef = useRef<number | null>(null);
 
   const [segments, setSegments] = useState(initialSegments);
   const [status, setStatus] = useState(initialStatus);
@@ -44,6 +59,7 @@ const ProgressivePlayer = ({
     setSegments(initialSegments);
     segmentsRef.current = initialSegments;
     setStatus(initialStatus);
+    loadedIndexRef.current = null;
   }, [initialSegments, initialStatus]);
 
   useEffect(() => {
@@ -57,18 +73,17 @@ const ProgressivePlayer = ({
         setStatus(res.statusLabel);
 
         const prevLen = segmentsRef.current.length;
-        const next = res.segments;
-        segmentsRef.current = next;
-        setSegments(next);
+        const merged = mergeSegments(segmentsRef.current, res.segments);
+        segmentsRef.current = merged;
+        setSegments(merged);
 
-        // If we were stuck on the last finished segment, advance into new ones.
         if (
           wantPlayRef.current &&
-          next.length > prevLen &&
+          merged.length > prevLen &&
           indexRef.current >= prevLen - 1 &&
           prevLen > 0
         ) {
-          const nextIndex = Math.min(prevLen, next.length - 1);
+          const nextIndex = Math.min(prevLen, merged.length - 1);
           indexRef.current = nextIndex;
           setIndex(nextIndex);
         }
@@ -82,8 +97,13 @@ const ProgressivePlayer = ({
     const el = videoRef.current;
     if (!el || !current) return;
 
+    // Only (re)load when the segment index changes — not when a poll refreshes URLs.
+    if (loadedIndexRef.current === current.index) return;
+    loadedIndexRef.current = current.index;
+
     el.src = current.url;
     el.load();
+    setError(null);
 
     if (wantPlayRef.current) {
       void el.play().catch(() => {
@@ -142,7 +162,25 @@ const ProgressivePlayer = ({
               wantPlayRef.current = false;
             }}
             onEnded={onEnded}
-            onError={() => setError("Failed to load this segment.")}
+            onError={() => {
+              loadedIndexRef.current = null;
+              setError("Failed to load this segment. Retrying…");
+              void (async () => {
+                const res = await getWatchPlaybackState(videoId);
+                if (!res.success || !("segments" in res)) return;
+                const fresh = res.segments.find(
+                  (s) => s.index === indexRef.current,
+                );
+                if (!fresh) return;
+                setSegments((prev) => {
+                  const next = prev.map((s) =>
+                    s.index === fresh.index ? fresh : s,
+                  );
+                  segmentsRef.current = next;
+                  return next;
+                });
+              })();
+            }}
           />
         ) : (
           <div className="flex aspect-video items-center justify-center bg-muted px-6 text-center text-sm text-muted-foreground">

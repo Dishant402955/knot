@@ -13,12 +13,12 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Dashboard shell + sidebar | Done |
 | Folders (CRUD + UI) | Done |
 | Videos (metadata) | Done (CRUD + folder assignment) |
-| B2 storage | Signed GET for playback; upload API still pending |
+| B2 storage | Done (signed GET + PUT) |
 | Watch page & playback | Done (sequential progressive WebM) |
-| Share links | Not started |
+| Share links | Desktop share URL on record; dashboard copy UX still open |
 | Comments & notifications | Partial (list UI only) |
-| API routes (desktop) | Not started |
-| Desktop (Electron) app | Phase A+ done (local capture + Clerk) |
+| API routes (desktop) | Done (`/api/videos` create, upload-url, segments, PATCH) |
+| Desktop (Electron) app | Done (local capture + Clerk + live upload) |
 | Infra (CI, tests) | Not started |
 
 ---
@@ -34,15 +34,16 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - **Folders** — full CRUD, nested folders, duplicate-name validation, root list page, detail page (`/dashboard/folder/:id`), breadcrumbs, grid/list view toggle, folder cards + rows, 3-dot actions menu, real video counts, recursive delete.
 - **Videos** — create / edit / delete metadata, visibility, folder assignment; dashboard list with grid/list; cards link to `/watch/[id]`.
 - **Watch page** — `/watch/[videoId]` with visibility enforcement (`PRIVATE` 404, `PUBLIC` open, `AUTHENTICATED` requires sign-in); sequential progressive playback of independently playable WebM segments via B2 signed GET URLs; polls for new segments while `RECORDING` / `PROCESSING`.
-- **B2 helper** — `apps/web/lib/b2.ts` signed download URLs (upload/presign still next).
+- **B2 helper** — `apps/web/lib/b2.ts` signed download + upload URLs.
+- **Desktop API** — `POST /api/videos`, `PUT .../segments/:index` (bytes → B2), legacy upload-url/segments, `PATCH` with status transitions + CORS for `knot://app`.
 - **Notifications** — `getAllUserNotifications`, list page with empty state (read-only).
-- **Desktop (Phase A+)** — Electron app in `apps/desktop`: source picker (screen/window/region), mic + system audio, webcam overlay (drag/resize, circle/square/rectangle), canvas compositing, independently playable ~5s WebM chunks on disk, countdown gated behind a ready indicator tray, capture prepared during countdown for instant start at 0, pause/resume/stop, screenshots, tray + global shortcuts. Clerk desktop auth (`@clerk/electron`, same keys as web, `knot://app/` OAuth redirect, offline continue).
+- **Desktop** — Electron capture + Clerk + **live upload via Next.js** (no direct B2 writes from the client). Share `/watch` link while recording; mark `READY`/`FAILED` on stop.
 
 ---
 
 ## Remaining — web app
 
-Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url, segments, bearer auth) are listed separately at the end.
+Web-only follow-ups. Desktop live upload + API routes are done (see [architecture](./architecture.md#desktop-api-route-handlers)).
 
 ### Foundation
 
@@ -64,7 +65,7 @@ Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url
 | # | Task | Notes |
 |---|------|-------|
 | 6 | ~~Watch page~~ | Done — sequential progressive player |
-| 7 | **B2 upload / productized PUT** | Signed GET done; desktop upload loop still needed |
+| 7 | ~~B2 upload / productized PUT~~ | Done — `/api/videos/:id/upload-url` + desktop upload loop |
 | 8 | ~~Visibility enforcement~~ | Done on watch loader |
 | 9 | ~~`proxy.ts` public `/watch`~~ | Done |
 | 10 | **Share links UX** | Copy-link from dashboard |
@@ -88,34 +89,28 @@ Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url
 |---|------|-------|
 | 14 | **VideoCard improvements** | Thumbnails, status badges, links to watch/edit |
 | 15 | **Tests & CI** | None yet |
-| 16 | **Production B2 config** | Env, bucket policies, error handling beyond dev script |
+| 16 | **Production B2 config** | Env, bucket policies; playback signed GET |
 
 ### Suggested web build order
 
 | Step | Task | Depends on |
 |------|------|------------|
 | 1 | Migrations | — |
-| 2 | Video CRUD + folder assignment | Migrations |
-| 3 | B2 signed playback URLs | Migrations |
-| 4 | Watch page + visibility + `proxy.ts` | Step 3 |
-| 5 | Share link UX | Step 4 |
-| 6 | Comments + notification polish | Step 4 |
+| 2 | Share link UX (dashboard) | Watch page |
+| 3 | Comments + notification polish | Watch page |
+| 4 | Tests & CI | — |
 
 ---
 
-## Remaining — desktop & API
+## Remaining — desktop & packaging
 
-Phase A+ (local capture + Clerk sign-in) is done. Still required for the full Knot loop:
+Live upload + API routes are done. Still open:
 
 | Task | Notes |
 |------|-------|
-| **API routes** | `POST /api/videos`, `/upload-url`, `/segments`, `PATCH /api/videos/:id` + bearer verification of Clerk tokens |
-| **Chunked upload during recording** | Presigned PUT → B2 → register segment while capturing |
-| **B2 upload API** | Server-side presigned URL generation (productized beyond `b2.ts` prototype) |
-| **Share link on record** | Show/copy link once chunk 0 uploads |
 | **Packaging** | Windows/macOS installers, auto-update |
 
-See `apps/desktop/README.md` for local recording + auth setup.
+See `apps/desktop/README.md` for local recording + auth + upload setup.
 
 ---
 
