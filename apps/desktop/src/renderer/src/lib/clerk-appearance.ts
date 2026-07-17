@@ -1,15 +1,19 @@
-/** Compact Clerk UI theme — light text on dark surfaces (no dark-on-dark). */
+/** Clerk UI theme aligned with apps/web dark shadcn / neutral. */
 export const clerkAppearance = {
   variables: {
-    colorPrimary: "#8fd3ff",
-    colorBackground: "#0c1219",
-    colorDanger: "#ff6b81",
+    colorPrimary: "#e5e5e5",
+    colorBackground: "#2a2a2a",
+    colorDanger: "#e05d4c",
     colorSuccess: "#5eead4",
     colorWarning: "#fbbf24",
-    borderRadius: "10px",
-    fontFamily: '"IBM Plex Sans Variable", "IBM Plex Sans", sans-serif',
+    colorText: "#fafafa",
+    colorTextSecondary: "#a3a3a3",
+    colorInputBackground: "#171717",
+    colorInputText: "#fafafa",
+    borderRadius: "0.625rem",
+    fontFamily: '"Inter Variable", Inter, system-ui, sans-serif',
     fontSize: "0.82rem",
-    spacingUnit: "0.75rem",
+    spacingUnit: "0.7rem",
   },
   elements: {
     rootBox: {
@@ -27,7 +31,6 @@ export const clerkAppearance = {
       width: "100%",
       gap: "0.75rem",
     },
-    // We already show Knot branding + Sign in / Create account tabs.
     header: {
       display: "none",
     },
@@ -35,25 +38,26 @@ export const clerkAppearance = {
       display: "none",
     },
     headerTitle: {
-      color: "#edf2f7",
-      fontFamily: '"Space Grotesk Variable", "Space Grotesk", sans-serif',
+      color: "#fafafa",
+      fontFamily: '"Inter Variable", Inter, system-ui, sans-serif',
       fontSize: "1rem",
     },
     headerSubtitle: {
-      color: "#a8b4c4",
+      color: "#a3a3a3",
       fontSize: "0.8rem",
     },
     socialButtonsBlockButton: {
-      background: "#161e2a",
-      border: "1px solid rgba(170, 200, 230, 0.22)",
-      color: "#edf2f7",
+      background: "#171717",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
+      color: "#fafafa",
       boxShadow: "none",
       height: "36px",
       minHeight: "36px",
+      borderRadius: "0.625rem",
     },
     socialButtonsBlockButtonText: {
-      color: "#edf2f7",
-      fontWeight: "600",
+      color: "#fafafa",
+      fontWeight: "500",
       fontSize: "0.82rem",
     },
     socialButtonsProviderIcon: {
@@ -62,76 +66,78 @@ export const clerkAppearance = {
       height: "16px",
     },
     socialButtonsBlockButtonArrow: {
-      color: "#a8b4c4",
+      color: "#a3a3a3",
     },
     dividerLine: {
-      background: "rgba(170, 200, 230, 0.16)",
+      background: "rgba(255, 255, 255, 0.1)",
     },
     dividerText: {
-      color: "#8b98ab",
+      color: "#737373",
       fontSize: "0.75rem",
     },
     formFieldLabel: {
-      color: "#c8d2e0",
+      color: "#a3a3a3",
       fontWeight: "500",
       fontSize: "0.78rem",
     },
     formFieldInput: {
-      background: "#10161f",
-      border: "1px solid rgba(170, 200, 230, 0.2)",
-      color: "#edf2f7",
-      caretColor: "#8fd3ff",
+      background: "#171717",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
+      color: "#fafafa",
+      caretColor: "#e5e5e5",
       height: "36px",
       fontSize: "0.82rem",
+      borderRadius: "0.625rem",
     },
     formFieldInputShowPasswordButton: {
-      color: "#a8b4c4",
+      color: "#a3a3a3",
     },
     formButtonPrimary: {
-      background: "#8fd3ff",
-      color: "#05070a",
-      fontWeight: "700",
+      background: "#e5e5e5",
+      color: "#171717",
+      fontWeight: "600",
       boxShadow: "none",
       height: "36px",
       minHeight: "36px",
       fontSize: "0.82rem",
+      borderRadius: "0.625rem",
     },
     footerActionText: {
-      color: "#8b98ab",
+      color: "#a3a3a3",
     },
     footerActionLink: {
-      color: "#8fd3ff",
+      color: "#e5e5e5",
     },
     identityPreviewText: {
-      color: "#edf2f7",
+      color: "#fafafa",
     },
     identityPreviewEditButton: {
-      color: "#8fd3ff",
+      color: "#e5e5e5",
     },
     formFieldSuccessText: {
       color: "#5eead4",
     },
     formFieldErrorText: {
-      color: "#ff8fa3",
+      color: "#e05d4c",
       fontSize: "0.75rem",
     },
     alertText: {
-      color: "#edf2f7",
+      color: "#fafafa",
       fontSize: "0.8rem",
     },
     otpCodeFieldInput: {
-      background: "#10161f",
-      border: "1px solid rgba(170, 200, 230, 0.2)",
-      color: "#edf2f7",
+      background: "#171717",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
+      color: "#fafafa",
     },
     alternativeMethodsBlockButton: {
-      color: "#edf2f7",
-      background: "#161e2a",
-      border: "1px solid rgba(170, 200, 230, 0.18)",
+      color: "#fafafa",
+      background: "#171717",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
       height: "36px",
     },
     formResendCodeLink: {
-      color: "#8fd3ff",
+      color: "#e5e5e5",
     },
   },
 } as const;

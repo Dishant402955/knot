@@ -23,7 +23,7 @@ function BrandMark() {
       <svg viewBox="0 0 24 24" fill="none">
         <path
           d="M5 4v16M5 12h6l7 8M11 12l7-8"
-          stroke="#8fd3ff"
+          stroke="#fafafa"
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"

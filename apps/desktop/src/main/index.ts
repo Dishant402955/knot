@@ -263,8 +263,8 @@ const parkControlWindow = () => {
   win.setBounds({
     x: -32000,
     y: -32000,
-    width: Math.max(controlParkBounds.width, 900),
-    height: Math.max(controlParkBounds.height, 600),
+    width: Math.max(controlParkBounds.width, 920),
+    height: Math.max(controlParkBounds.height, 720),
   });
   if (!win.isVisible()) {
     win.showInactive();
@@ -410,10 +410,10 @@ const ensureControlWindow = () => {
   }
 
   controlWindow = new BrowserWindow({
-    width: 1100,
-    height: 740,
-    minWidth: 900,
-    minHeight: 600,
+    width: 1080,
+    height: 860,
+    minWidth: 920,
+    minHeight: 720,
     title: "Knot",
     show: false,
     backgroundColor: "#05070a",
