@@ -1,6 +1,8 @@
 /**
  * Fail packaging when required production env is missing or still localhost.
- * Escape hatch: KNOT_ALLOW_LOCAL_PACKAGE=1 (local smoke tests only).
+ * Loads production env files last so packaging bakes the deployed API URL.
+ *
+ * Escape hatch: KNOT_ALLOW_LOCAL_PACKAGE=1 (local smoke packages only).
  */
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
@@ -9,11 +11,16 @@ import { resolve } from "node:path";
 function loadEnvFiles() {
   const desktopRoot = resolve(__dirname, "..");
   const webRoot = resolve(__dirname, "../../web");
+  // Later files override earlier ones — production wins.
   for (const file of [
     resolve(webRoot, ".env"),
     resolve(webRoot, ".env.local"),
     resolve(desktopRoot, ".env"),
     resolve(desktopRoot, ".env.local"),
+    resolve(webRoot, ".env.production"),
+    resolve(webRoot, ".env.production.local"),
+    resolve(desktopRoot, ".env.production"),
+    resolve(desktopRoot, ".env.production.local"),
   ]) {
     if (existsSync(file)) config({ path: file, override: true });
   }
@@ -51,8 +58,15 @@ if (!key) {
 
 if (isLocalhost(webUrl) && !allowLocal) {
   errors.push(
-    `KNOT_WEB_APP_URL is "${webUrl}" — set it to your deployed Knot web URL before packaging.\n` +
+    `KNOT_WEB_APP_URL is "${webUrl}" — set it to your deployed https Knot web URL before packaging.\n` +
+      "  Prefer apps/desktop/.env.production (see example.env.production).\n" +
       "  For a local-only smoke package, set KNOT_ALLOW_LOCAL_PACKAGE=1.",
+  );
+}
+
+if (!isLocalhost(webUrl) && !webUrl.startsWith("https://") && !allowLocal) {
+  errors.push(
+    `KNOT_WEB_APP_URL should use https for release builds (got "${webUrl}").`,
   );
 }
 
@@ -64,3 +78,8 @@ if (errors.length) {
 }
 
 console.log(`[knot] Release env OK — API base ${webUrl}`);
+if (key.startsWith("pk_test_")) {
+  console.warn(
+    "[knot] Warning: using a Clerk pk_test_ key in a release build. Prefer pk_live_ for production.",
+  );
+}

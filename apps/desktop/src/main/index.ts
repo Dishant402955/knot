@@ -1302,6 +1302,9 @@ app.whenReady().then(async () => {
   ensureIndicatorWindow();
   ensureCountdownWindow();
 
+  const { setupAutoUpdater } = await import("./updater");
+  setupAutoUpdater();
+
   app.on("activate", () => {
     unparkControlWindow();
   });

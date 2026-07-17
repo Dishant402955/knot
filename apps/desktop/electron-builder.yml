@@ -1,6 +1,6 @@
 # https://www.electron.build/configuration/configuration
 # Rebuild after code changes: bump version (if shipping), then `pnpm package:win` / `:mac` / `:linux`.
-# Env is baked at `electron-vite build` time — set Clerk + KNOT_WEB_APP_URL before packaging.
+# Env is baked at `electron-vite build --mode production` — set Clerk + KNOT_WEB_APP_URL in .env.production.
 
 appId: app.knot.desktop
 productName: Knot
@@ -20,11 +20,11 @@ files:
   - "!electron.vite.config.ts"
   - "!tsconfig*.json"
   - "!example.env"
+  - "!example.env.production"
   - "!README.md"
 
 asar: true
 
-# Register knot:// for OAuth return (Clerk Native). Also set at runtime in main.
 protocols:
   - name: Knot
     schemes:
@@ -32,12 +32,12 @@ protocols:
 
 win:
   executableName: Knot
+  icon: icon.png
   target:
     - target: nsis
       arch:
         - x64
-  # Place packaging/icon.ico (or icon.png) for a branded installer/exe.
-  # icon: icon.ico
+  # Code signing (optional): set CSC_LINK (pfx/p12 path or base64) + CSC_KEY_PASSWORD
 
 nsis:
   oneClick: false
@@ -47,40 +47,43 @@ nsis:
   shortcutName: Knot
   uninstallDisplayName: Knot
   artifactName: Knot-${version}-Setup.${ext}
-  # Keep recordings / Clerk keychain data on uninstall
   deleteAppDataOnUninstall: false
 
 mac:
   category: public.app-category.productivity
+  icon: icon.png
   target:
     - target: dmg
       arch:
         - x64
         - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: entitlements.mac.plist
+  entitlementsInherit: entitlements.mac.plist
   extendInfo:
     NSCameraUsageDescription: Knot needs camera access for the webcam overlay while recording.
     NSMicrophoneUsageDescription: Knot needs microphone access to record your voice.
     NSScreenCaptureDescription: Knot needs screen recording permission to capture your display.
-  # icon: icon.icns
-  # After signing: configure notarize + CSC_* / Apple ID secrets when packaging.
-  # hardenedRuntime: true
-  # gatekeeperAssess: false
-  # entitlements: packaging/entitlements.mac.plist
-  # entitlementsInherit: packaging/entitlements.mac.plist
+  # Notarization: packaging/notarize.cjs (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID)
+
+afterSign: packaging/notarize.cjs
 
 dmg:
   artifactName: Knot-${version}.${ext}
 
 linux:
   category: Utility
+  icon: icon.png
   target:
     - AppImage
   artifactName: Knot-${version}.${ext}
 
-# Publish / auto-update (optional next step):
-# publish:
-#   provider: github
-#   owner: YOUR_ORG
-#   repo: knot
+# Auto-update feed (electron-updater). Publish artifacts with GH_TOKEN / GH_RELEASE.
+publish:
+  provider: github
+  owner: Dishant402955
+  repo: knot
+  releaseType: release
 
 npmRebuild: false

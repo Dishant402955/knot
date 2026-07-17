@@ -309,19 +309,20 @@ Drizzle Kit is configured in `apps/web/drizzle.config.ts` (output `./drizzle`). 
 |---------|---------|
 | Next.js web | Vercel / Node host |
 | PostgreSQL | Neon (or any Postgres) |
-| B2 bucket | Backblaze region |
-| Clerk | Clerk cloud |
-| Desktop | electron-builder installers (`apps/desktop/release/`); GitHub Releases + auto-updater TBD |
+| B2 bucket | Backblaze — see [b2-production.md](./b2-production.md) |
+| Clerk | Clerk cloud (`pk_live_` / `sk_live_` in production) |
+| Desktop | electron-builder installers + GitHub Releases auto-update |
 
 ### Desktop packaging
 
 | Script | Artifact |
 |--------|----------|
 | `pnpm --filter desktop package:win` | Windows NSIS (`Knot-<ver>-Setup.exe`) |
-| `pnpm --filter desktop package:mac` | macOS DMG |
+| `pnpm --filter desktop package:mac` | macOS DMG (notarizes when Apple env set) |
 | `pnpm --filter desktop package:linux` | AppImage |
+| `pnpm --filter desktop release:*` | Build + publish to GitHub Releases |
 
-Config: `apps/desktop/electron-builder.yml`. **Env is compile-time** (`KNOT_WEB_APP_URL`, Clerk publishable key) — rebuild the installer after any env or app change. Full “how to refresh packaging” steps: `apps/desktop/README.md` § Packaging.
+Bake production API URL via `apps/desktop/.env.production` (`KNOT_WEB_APP_URL`) — `build:release` uses `--mode production`. Details: `apps/desktop/README.md` § Packaging.
 
 ---
 

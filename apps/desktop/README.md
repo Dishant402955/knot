@@ -126,68 +126,51 @@ Requests use `Authorization: Bearer <token>` against `KNOT_WEB_APP_URL` (default
 
 ## Packaging (installers)
 
-Knot uses **electron-vite** to compile (`out/`) and **electron-builder** to produce installers under `apps/desktop/release/`.
+Knot uses **electron-vite** (`--mode production`) to compile `out/`, then **electron-builder** for installers under `apps/desktop/release/`.
 
 | Script | Output |
 |--------|--------|
-| `pnpm --filter desktop package:win` | Windows NSIS setup (`Knot-<version>-Setup.exe`) |
-| `pnpm --filter desktop package:mac` | macOS DMG (run on a Mac) |
+| `pnpm --filter desktop package:win` | Windows NSIS (`Knot-<version>-Setup.exe`) |
+| `pnpm --filter desktop package:mac` | macOS DMG |
 | `pnpm --filter desktop package:linux` | Linux AppImage |
-| `pnpm --filter desktop package:dir` | Unpacked app dir only (fast local smoke) |
-| `pnpm --filter desktop package` | Alias for `package:win` |
+| `pnpm --filter desktop package:dir` | Unpacked dir (smoke) |
+| `pnpm --filter desktop release:win` | Build **and** publish to GitHub Releases |
 
-Config: `electron-builder.yml`. Branding assets: `packaging/` (add `icon.png` ≥512×512 when ready).
+Config: `electron-builder.yml`. Icon: `packaging/icon.png`.
 
 ### Before you package (required)
 
-Env is **baked at build time**. Packaged apps do **not** read monorepo `.env` files.
+Env is **baked at build time** via `electron-vite build --mode production`. Packaged apps do **not** read monorepo `.env` at runtime.
 
-1. Set in `apps/desktop/.env` and/or `apps/web/.env` (desktop wins on conflict):
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — same as web
-   - `KNOT_WEB_APP_URL` — **deployed** Knot web URL (not `localhost` for real releases)
-2. Clerk Native redirect still: `knot://app/`
-3. The package scripts run `assert-release-env` and refuse localhost unless you opt in:
+1. Copy `example.env.production` → `apps/desktop/.env.production` and set:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (prefer `pk_live_` for real releases)
+   - `KNOT_WEB_APP_URL=https://your-deployed-web` (must be **https**, not localhost)
+2. Align web deploy: same origin in `NEXT_PUBLIC_APP_URL` + B2 — see [docs/b2-production.md](../../docs/b2-production.md) and `pnpm --filter web assert:production`.
+3. Clerk Native redirect: `knot://app/`
+4. Package scripts refuse localhost unless you opt in:
 
 ```bash
-# Local smoke installer only (points at localhost API)
+# Local smoke installer only
 KNOT_ALLOW_LOCAL_PACKAGE=1 pnpm --filter desktop package:win
 ```
 
 ### After you change code — how to refresh packaging
 
-Every code or env change needs a **full rebuild** of the installer (Vite bakes env into the JS bundles):
-
-1. **Bump version** in `apps/desktop/package.json` when you intend to ship (`0.1.0` → `0.1.1`, etc.). Installer filenames include `${version}`.
-2. **Update env** if the API URL or Clerk key changed (`.env`).
-3. **Rebuild the installer** for each OS you ship:
-
-```bash
-pnpm --filter desktop package:win    # Windows
-pnpm --filter desktop package:mac    # macOS (on a Mac)
-pnpm --filter desktop package:linux  # Linux
-```
-
-4. **Test** the new artifact from `apps/desktop/release/` (install fresh, sign in, record one short clip, confirm watch URL).
-5. **Distribute** the new setup/DMG/AppImage (replace the previous release asset, or attach to a new tag).
-
-You do **not** need to edit `electron-builder.yml` for ordinary app code changes. Edit that file only when packaging behavior changes (app id, targets, icons, protocols, signing).
+1. Bump `version` in `apps/desktop/package.json` when shipping.
+2. Update `.env.production` if Clerk / API URL changed.
+3. Rebuild: `pnpm --filter desktop package:win` (or `:mac` / `:linux`).
+4. Install from `apps/desktop/release/` and smoke-record.
+5. For public distribution with auto-update: `pnpm --filter desktop release:win` (needs `GH_TOKEN`).
 
 | Change type | What to do |
 |-------------|------------|
-| App / UI / upload code | Bump version (if shipping) → `package:*` |
-| Clerk key or `KNOT_WEB_APP_URL` | Update `.env` → `package:*` (must rebuild) |
-| App icon | Drop `packaging/icon.png` (or `.ico` / `.icns`) → `package:*` |
-| Installer options / protocol / OS targets | Edit `electron-builder.yml` → `package:*` |
-| Auto-update channel | Not wired yet — see below |
+| App / UI / upload code | Bump version → `package:*` |
+| Clerk key or `KNOT_WEB_APP_URL` | Update `.env.production` → `package:*` |
+| App icon | Replace `packaging/icon.png` → `package:*` |
+| Installer / signing / publish | Edit `electron-builder.yml` → `package:*` / `release:*` |
 
-### Code signing & auto-update (not required for first local builds)
+### Code signing, notarization & auto-update
 
-- **Windows:** unsigned installs show SmartScreen warnings. For public releases, set `CSC_LINK` / `CSC_KEY_PASSWORD` (or Azure Trusted Signing) when you package.
-- **macOS:** enable `hardenedRuntime` + entitlements in `electron-builder.yml`, then notarize (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`).
-- **Auto-update:** not enabled yet. When ready, add `electron-updater`, uncomment `publish` in `electron-builder.yml`, and ship via GitHub Releases.
-
-### Next (optional)
-
-- App icons under `packaging/`
-- Code signing + macOS notarization
-- `electron-updater` + GitHub Releases
+- **Windows signing:** set `CSC_LINK` + `CSC_KEY_PASSWORD` when packaging (reduces SmartScreen warnings).
+- **macOS:** `hardenedRuntime` + entitlements are on; notarization runs via `packaging/notarize.cjs` when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are set.
+- **Auto-update:** `electron-updater` checks GitHub Releases on launch (packaged builds). Publish with `release:win` / `release:mac` / `release:linux` and a token that can create releases on `Dishant402955/knot`.
