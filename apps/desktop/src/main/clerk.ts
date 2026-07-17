@@ -23,8 +23,14 @@ let clerkBridgeCleanup: (() => void) | null = null;
 /**
  * Load Clerk env from desktop + web `.env` files into process.env.
  * Must run before createClerkBridge / any clerkEnvFromProcess() call.
+ *
+ * Packaged builds skip filesystem dotenv — values are baked in at
+ * `electron-vite build` time via Vite `define` (see electron.vite.config.ts).
+ * Monorepo `.env` paths do not exist inside an installed app.
  */
 export function loadDesktopEnvFiles() {
+  if (app.isPackaged) return;
+
   const desktopRoot = join(__dirname, "../..");
   const webRoot = join(__dirname, "../../../web");
 
@@ -39,6 +45,32 @@ export function loadDesktopEnvFiles() {
     if (existsSync(file)) {
       loadDotenv({ path: file, override: true });
     }
+  }
+}
+
+function isLocalhostUrl(url: string) {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+/** Warn when a release build would talk to localhost or lack Clerk. */
+export function assertPackagedRuntimeConfig() {
+  if (!app.isPackaged) return;
+
+  const clerk = getClerkConfig();
+  if (!clerk.publishableKey) {
+    console.error(
+      "[knot] Packaged build is missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY. Rebuild with env set (see apps/desktop/README.md § Packaging).",
+    );
+  }
+  if (isLocalhostUrl(clerk.webAppUrl)) {
+    console.error(
+      `[knot] Packaged build points at ${clerk.webAppUrl}. Set KNOT_WEB_APP_URL to your deployed web API before packaging, then rebuild.`,
+    );
   }
 }
 
@@ -80,6 +112,7 @@ export function isKnotOAuthCallbackUrl(url: string): boolean {
 
 export function initClerkBridge() {
   loadDesktopEnvFiles();
+  assertPackagedRuntimeConfig();
 
   const clerk = getClerkConfig();
 
@@ -96,6 +129,7 @@ export function initClerkBridge() {
     console.log(
       "[knot] Renderer must load over knot:// (not http://localhost) for Clerk native auth.",
     );
+    console.log(`[knot] API / dashboard base: ${clerk.webAppUrl}`);
   }
 
   const bridge = createClerkBridge({
@@ -107,7 +141,7 @@ export function initClerkBridge() {
       scheme: KNOT_RENDERER_SCHEME,
       host: KNOT_RENDERER_HOST,
     },
-    userAgent: "Knot Desktop/0.1.0",
+    userAgent: `Knot Desktop/${app.getVersion()}`,
   });
 
   clerkBridgeCleanup = () => {

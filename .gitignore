@@ -24,9 +24,16 @@ coverage
 # Build Outputs
 .next/
 out/
-build
 dist
+release/
 
+# electron-builder app resources (icons, entitlements) — keep tracked
+!apps/desktop/packaging/
+!apps/desktop/packaging/**
+
+# Misc ignored build dirs (do not ignore desktop packaging/)
+build
+!apps/desktop/packaging/
 
 # Debug
 npm-debug.log*

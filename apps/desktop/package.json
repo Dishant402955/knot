@@ -4,13 +4,21 @@
   "private": true,
   "license": "Apache-2.0",
   "description": "Knot desktop recorder — screen capture, webcam overlay, chunked recording",
+  "author": "Knot",
+  "homepage": "https://github.com/Dishant402955/knot",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "check-types": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "lint": "echo \"no lint configured\""
+    "lint": "echo \"no lint configured\"",
+    "assert-release-env": "tsx scripts/assert-release-env.ts",
+    "package:dir": "pnpm assert-release-env && pnpm build && electron-builder --dir --config electron-builder.yml",
+    "package:win": "pnpm assert-release-env && pnpm build && electron-builder --win --config electron-builder.yml",
+    "package:mac": "pnpm assert-release-env && pnpm build && electron-builder --mac --config electron-builder.yml",
+    "package:linux": "pnpm assert-release-env && pnpm build && electron-builder --linux --config electron-builder.yml",
+    "package": "pnpm package:win"
   },
   "dependencies": {
     "@clerk/electron": "^0.0.15",
@@ -30,7 +38,9 @@
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",
     "electron": "^37.2.6",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^4.0.0",
+    "tsx": "^4.22.4",
     "typescript": "5.9.2",
     "vite": "^7.1.7"
   }

@@ -19,7 +19,7 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Comments & notifications | Partial (list UI only) |
 | API routes (desktop) | Done (`POST /api/videos`, `PUT .../segments/:index`, PATCH) |
 | Desktop (Electron) app | Done (local capture + Clerk + live upload via API) |
-| Infra (CI, tests) | Not started |
+| Tests | Not started |
 | Dashboard nav performance | Done (`loading.tsx`, router staleTimes, lazy dialogs) |
 
 ---
@@ -89,7 +89,7 @@ Web-only follow-ups. Desktop live upload + API routes are done (see [architectur
 | # | Task | Notes |
 |---|------|-------|
 | 14 | **VideoCard improvements** | Thumbnails, status badges, links to watch/edit |
-| 15 | **Tests & CI** | None yet |
+| 15 | **Tests** | None yet |
 | 16 | **Production B2 config** | Env, bucket policies; playback signed GET |
 
 ### Suggested web build order
@@ -99,20 +99,23 @@ Web-only follow-ups. Desktop live upload + API routes are done (see [architectur
 | 1 | Migrations | — |
 | 2 | Share link UX (dashboard) | Watch page |
 | 3 | Comments + notification polish | Watch page |
-| 4 | Tests & CI | — |
+| 4 | Tests | — |
 
 ---
 
 ## Remaining — desktop & packaging
 
-Live upload + API routes are done. Still open:
+Live upload + API routes are done. Packaging tooling is in place (`electron-builder`); signing / auto-update still open.
 
 | Task | Notes |
 |------|-------|
-| **Packaging** | Windows/macOS installers, auto-update |
+| ~~**Packaging tooling**~~ | Done — `pnpm --filter desktop package:win` / `:mac` / `:linux` → `apps/desktop/release/`. See `apps/desktop/README.md` § Packaging |
+| **Icons / branding** | Add `packaging/icon.png` (≥512×512) |
+| **Code signing + notarization** | Windows Authenticode / Apple notarize for public installs |
+| **Auto-update** | `electron-updater` + GitHub Releases (not wired yet) |
 | **B2 reachability for local API** | On networks that block B2 (e.g. Cisco Umbrella), point desktop at a **cloud-hosted** web API, or allowlist `*.backblazeb2.com` for the API host |
 
-See `apps/desktop/README.md` for local recording + auth + upload setup.
+See `apps/desktop/README.md` for local recording + auth + upload + packaging.
 
 ---
 
@@ -137,8 +140,8 @@ See `apps/desktop/README.md` for local recording + auth + upload setup.
 - Offline continue without sign-in
 
 **Desktop only (later):**
-- Bearer token verification on API routes
-- Upload during recording using that token
+- Code signing, branded icons, auto-update
+- Production `KNOT_WEB_APP_URL` for packaged installs (bake at build time)
 
 ---
 

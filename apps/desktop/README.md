@@ -27,7 +27,7 @@ Order of operations when you press **Record**:
 3. Capture is **prepared in parallel** (desktop/mic/cam streams + canvas) while the countdown runs.
 4. **Center countdown** starts only after the tray is fully ready.
 5. When the timer hits **0**, encoding **commits immediately** (cloud session was already created during countdown if signed in), and the tray switches to `recording`.
-6. Each ~5s chunk is saved locally and uploaded (presigned PUT → register segment) while capture continues.
+6. Each ~5s chunk is saved locally and uploaded (`PUT` to Next.js → B2) while capture continues.
 7. On **Stop**, pending uploads flush and the video is marked `READY` (or `FAILED` if uploads broke).
 
 ### Chunks on disk
@@ -104,6 +104,15 @@ pnpm --filter desktop dev
 
 Run the **web app** on port 3000 when testing API calls (`pnpm --filter web dev`).
 
+### Unpackaged production smoke test
+
+Compiles to `out/` and runs Electron without an installer:
+
+```bash
+pnpm --filter desktop build
+pnpm --filter desktop preview
+```
+
 ## API usage
 
 ```tsx
@@ -115,10 +124,70 @@ await api.json("/api/videos", { method: "POST", body: "..." });
 
 Requests use `Authorization: Bearer <token>` against `KNOT_WEB_APP_URL` (default `http://localhost:3000`).
 
-Desktop **API routes for upload** (`/api/videos`, presigned URLs, segments) are not implemented yet — see [Project Status](../../docs/project-status.md).
+## Packaging (installers)
 
-## Not in Phase A+ (next)
+Knot uses **electron-vite** to compile (`out/`) and **electron-builder** to produce installers under `apps/desktop/release/`.
 
-- Chunk upload to B2 during recording
-- Share link as soon as chunk 0 is uploaded
-- Packaged installers + auto-update
+| Script | Output |
+|--------|--------|
+| `pnpm --filter desktop package:win` | Windows NSIS setup (`Knot-<version>-Setup.exe`) |
+| `pnpm --filter desktop package:mac` | macOS DMG (run on a Mac) |
+| `pnpm --filter desktop package:linux` | Linux AppImage |
+| `pnpm --filter desktop package:dir` | Unpacked app dir only (fast local smoke) |
+| `pnpm --filter desktop package` | Alias for `package:win` |
+
+Config: `electron-builder.yml`. Branding assets: `packaging/` (add `icon.png` ≥512×512 when ready).
+
+### Before you package (required)
+
+Env is **baked at build time**. Packaged apps do **not** read monorepo `.env` files.
+
+1. Set in `apps/desktop/.env` and/or `apps/web/.env` (desktop wins on conflict):
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — same as web
+   - `KNOT_WEB_APP_URL` — **deployed** Knot web URL (not `localhost` for real releases)
+2. Clerk Native redirect still: `knot://app/`
+3. The package scripts run `assert-release-env` and refuse localhost unless you opt in:
+
+```bash
+# Local smoke installer only (points at localhost API)
+KNOT_ALLOW_LOCAL_PACKAGE=1 pnpm --filter desktop package:win
+```
+
+### After you change code — how to refresh packaging
+
+Every code or env change needs a **full rebuild** of the installer (Vite bakes env into the JS bundles):
+
+1. **Bump version** in `apps/desktop/package.json` when you intend to ship (`0.1.0` → `0.1.1`, etc.). Installer filenames include `${version}`.
+2. **Update env** if the API URL or Clerk key changed (`.env`).
+3. **Rebuild the installer** for each OS you ship:
+
+```bash
+pnpm --filter desktop package:win    # Windows
+pnpm --filter desktop package:mac    # macOS (on a Mac)
+pnpm --filter desktop package:linux  # Linux
+```
+
+4. **Test** the new artifact from `apps/desktop/release/` (install fresh, sign in, record one short clip, confirm watch URL).
+5. **Distribute** the new setup/DMG/AppImage (replace the previous release asset, or attach to a new tag).
+
+You do **not** need to edit `electron-builder.yml` for ordinary app code changes. Edit that file only when packaging behavior changes (app id, targets, icons, protocols, signing).
+
+| Change type | What to do |
+|-------------|------------|
+| App / UI / upload code | Bump version (if shipping) → `package:*` |
+| Clerk key or `KNOT_WEB_APP_URL` | Update `.env` → `package:*` (must rebuild) |
+| App icon | Drop `packaging/icon.png` (or `.ico` / `.icns`) → `package:*` |
+| Installer options / protocol / OS targets | Edit `electron-builder.yml` → `package:*` |
+| Auto-update channel | Not wired yet — see below |
+
+### Code signing & auto-update (not required for first local builds)
+
+- **Windows:** unsigned installs show SmartScreen warnings. For public releases, set `CSC_LINK` / `CSC_KEY_PASSWORD` (or Azure Trusted Signing) when you package.
+- **macOS:** enable `hardenedRuntime` + entitlements in `electron-builder.yml`, then notarize (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`).
+- **Auto-update:** not enabled yet. When ready, add `electron-updater`, uncomment `publish` in `electron-builder.yml`, and ship via GitHub Releases.
+
+### Next (optional)
+
+- App icons under `packaging/`
+- Code signing + macOS notarization
+- `electron-updater` + GitHub Releases

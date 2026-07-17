@@ -1,0 +1,86 @@
+# https://www.electron.build/configuration/configuration
+# Rebuild after code changes: bump version (if shipping), then `pnpm package:win` / `:mac` / `:linux`.
+# Env is baked at `electron-vite build` time — set Clerk + KNOT_WEB_APP_URL before packaging.
+
+appId: app.knot.desktop
+productName: Knot
+copyright: Copyright © Knot
+
+directories:
+  buildResources: packaging
+  output: release
+
+files:
+  - out/**/*
+  - package.json
+  - "!src/**"
+  - "!scripts/**"
+  - "!**/.env"
+  - "!**/.env.*"
+  - "!electron.vite.config.ts"
+  - "!tsconfig*.json"
+  - "!example.env"
+  - "!README.md"
+
+asar: true
+
+# Register knot:// for OAuth return (Clerk Native). Also set at runtime in main.
+protocols:
+  - name: Knot
+    schemes:
+      - knot
+
+win:
+  executableName: Knot
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Place packaging/icon.ico (or icon.png) for a branded installer/exe.
+  # icon: icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Knot
+  uninstallDisplayName: Knot
+  artifactName: Knot-${version}-Setup.${ext}
+  # Keep recordings / Clerk keychain data on uninstall
+  deleteAppDataOnUninstall: false
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  extendInfo:
+    NSCameraUsageDescription: Knot needs camera access for the webcam overlay while recording.
+    NSMicrophoneUsageDescription: Knot needs microphone access to record your voice.
+    NSScreenCaptureDescription: Knot needs screen recording permission to capture your display.
+  # icon: icon.icns
+  # After signing: configure notarize + CSC_* / Apple ID secrets when packaging.
+  # hardenedRuntime: true
+  # gatekeeperAssess: false
+  # entitlements: packaging/entitlements.mac.plist
+  # entitlementsInherit: packaging/entitlements.mac.plist
+
+dmg:
+  artifactName: Knot-${version}.${ext}
+
+linux:
+  category: Utility
+  target:
+    - AppImage
+  artifactName: Knot-${version}.${ext}
+
+# Publish / auto-update (optional next step):
+# publish:
+#   provider: github
+#   owner: YOUR_ORG
+#   repo: knot
+
+npmRebuild: false

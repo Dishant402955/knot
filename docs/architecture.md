@@ -308,7 +308,17 @@ Drizzle Kit is configured in `apps/web/drizzle.config.ts` (output `./drizzle`). 
 | PostgreSQL | Neon (or any Postgres) |
 | B2 bucket | Backblaze region |
 | Clerk | Clerk cloud |
-| Desktop | GitHub Releases / auto-updater (TBD) |
+| Desktop | electron-builder installers (`apps/desktop/release/`); GitHub Releases + auto-updater TBD |
+
+### Desktop packaging
+
+| Script | Artifact |
+|--------|----------|
+| `pnpm --filter desktop package:win` | Windows NSIS (`Knot-<ver>-Setup.exe`) |
+| `pnpm --filter desktop package:mac` | macOS DMG |
+| `pnpm --filter desktop package:linux` | AppImage |
+
+Config: `apps/desktop/electron-builder.yml`. **Env is compile-time** (`KNOT_WEB_APP_URL`, Clerk publishable key) — rebuild the installer after any env or app change. Full “how to refresh packaging” steps: `apps/desktop/README.md` § Packaging.
 
 ---
 

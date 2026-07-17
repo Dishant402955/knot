@@ -40,20 +40,19 @@ Knot is an open-source, Loom-style async video platform. Record your screen from
 | Desktop | Electron.js |
 | Auth | Clerk |
 | Database | PostgreSQL (Drizzle ORM) |
-| Media storage | Backblaze B2 (direct upload, no relay) |
+| Media storage | Backblaze B2 (via Next.js API upload) |
 
 ## Architecture (short)
 
-Clerk handles authentication for both web and desktop. PostgreSQL stores metadata (videos, folders, segments). While recording, the desktop app requests presigned upload URLs from Next.js API routes and uploads each chunk **directly to B2** as it is captured. The web app serves progressive playback via signed B2 URLs after checking visibility rules — viewers can watch from the cloud before the recording has fully finished uploading.
+Clerk handles authentication for both web and desktop. PostgreSQL stores metadata (videos, folders, segments). While recording, the desktop app uploads each chunk to Next.js (`PUT /api/videos/:id/segments/:index`), and the API writes to B2. The web app serves progressive playback via signed B2 URLs after checking visibility rules — viewers can watch from the cloud before the recording has fully finished uploading.
 
 ```
-Desktop ──presigned URL──▶ Next.js API ──▶ PostgreSQL
-   │         (per chunk)                         │
-   └──── direct chunk upload (during recording) ─▶ Backblaze B2
-                                                    │
+Desktop ──PUT chunk bytes──▶ Next.js API ──▶ PostgreSQL
+   │                              │
+   │                              └── PutObject ──▶ Backblaze B2
+   │                                                    │
 Web viewer ◀── progressive signed URLs ─── Next.js API ┘
 ```
-
 Full details: [docs/architecture.md](./docs/architecture.md)
 
 ## Documentation
@@ -83,8 +82,8 @@ pnpm install
 cp apps/web/example.env apps/web/.env.local
 # Fill in Clerk keys, DATABASE_URL, and B2 credentials
 
-# Run database migrations (once migrations are generated)
-# cd apps/web && pnpm drizzle-kit push
+# Apply database migrations
+pnpm --filter web db:migrate
 
 # Start development server
 pnpm dev
@@ -112,7 +111,7 @@ pnpm --filter desktop dev
 # or: pnpm dev:desktop
 ```
 
-> **Note:** Desktop Phase A+ captures locally (independently playable ~5s WebM chunks) and supports Clerk sign-in (same app as web). Cloud upload during recording is not wired yet. See [Project Status](./docs/project-status.md) and [Desktop README](./apps/desktop/README.md).
+Desktop records locally (independently playable ~5s WebM chunks), supports Clerk sign-in, and uploads to the web API while recording when signed in. Packaging: see [Desktop README § Packaging](./apps/desktop/README.md#packaging-installers). Status: [Project Status](./docs/project-status.md).
 
 ## License
 
