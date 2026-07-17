@@ -17,9 +17,10 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Watch page & playback | Done (sequential progressive WebM) |
 | Share links | Desktop share URL on record; dashboard copy UX still open |
 | Comments & notifications | Partial (list UI only) |
-| API routes (desktop) | Done (`/api/videos` create, upload-url, segments, PATCH) |
-| Desktop (Electron) app | Done (local capture + Clerk + live upload) |
+| API routes (desktop) | Done (`POST /api/videos`, `PUT .../segments/:index`, PATCH) |
+| Desktop (Electron) app | Done (local capture + Clerk + live upload via API) |
 | Infra (CI, tests) | Not started |
+| Dashboard nav performance | Done (`loading.tsx`, router staleTimes, lazy dialogs) |
 
 ---
 
@@ -30,14 +31,14 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - **Database schema** — `folders`, `videos`, `video_segments`, `comments`, `notifications` + enums (`db/schema.ts`).
 - **Marketing site** — landing page (Hero, Features, Use Cases, Pricing, Footer) + navbar.
 - **Auth (web)** — Clerk provider, sign-in/sign-up pages, `proxy.ts` route protection (Next.js 16), `currentUser()` guards in folder server actions, post-login redirect to `/dashboard`.
-- **Dashboard** — layout with header bar (sidebar trigger + `UserButton`), icon-collapsible sidebar with active-route highlight, home page with recent folders/videos and shared grid/list toggle, notifications list page, settings (`UserProfile`).
+- **Dashboard** — layout with header bar (sidebar trigger + `UserButton`), icon-collapsible sidebar with active-route highlight, home page with recent folders/videos and shared grid/list toggle, notifications list page, settings (`UserProfile`). Soft-nav responsiveness: `app/dashboard/loading.tsx`, `experimental.staleTimes`, edit/delete dialogs loaded on demand (no resting UI redesign).
 - **Folders** — full CRUD, nested folders, duplicate-name validation, root list page, detail page (`/dashboard/folder/:id`), breadcrumbs, grid/list view toggle, folder cards + rows, 3-dot actions menu, real video counts, recursive delete.
 - **Videos** — create / edit / delete metadata, visibility, folder assignment; dashboard list with grid/list; cards link to `/watch/[id]`.
-- **Watch page** — `/watch/[videoId]` with visibility enforcement (`PRIVATE` 404, `PUBLIC` open, `AUTHENTICATED` requires sign-in); sequential progressive playback of independently playable WebM segments via B2 signed GET URLs; polls for new segments while `RECORDING` / `PROCESSING`.
-- **B2 helper** — `apps/web/lib/b2.ts` signed download + upload URLs.
+- **Watch page** — `/watch/[videoId]` with visibility enforcement (`PRIVATE` 404, `PUBLIC` open, `AUTHENTICATED` requires sign-in); sequential progressive playback of independently playable WebM segments via B2 signed GET URLs; polls for new segments while `RECORDING` / `PROCESSING` without restarting the current segment on URL refresh.
+- **B2 helper** — `apps/web/lib/b2.ts` signed download + server `PutObject` for segment upload.
 - **Desktop API** — `POST /api/videos`, `PUT .../segments/:index` (bytes → B2), legacy upload-url/segments, `PATCH` with status transitions + CORS for `knot://app`.
 - **Notifications** — `getAllUserNotifications`, list page with empty state (read-only).
-- **Desktop** — Electron capture + Clerk + **live upload via Next.js** (no direct B2 writes from the client). Share `/watch` link while recording; mark `READY`/`FAILED` on stop.
+- **Desktop** — Electron capture + Clerk + **live upload via Next.js** (no direct B2 writes from the client). Share `/watch` link while recording; mark `READY`/`FAILED` on stop. Desktop UI aligned to web dark neutral theme.
 
 ---
 
@@ -65,7 +66,7 @@ Web-only follow-ups. Desktop live upload + API routes are done (see [architectur
 | # | Task | Notes |
 |---|------|-------|
 | 6 | ~~Watch page~~ | Done — sequential progressive player |
-| 7 | ~~B2 upload / productized PUT~~ | Done — `/api/videos/:id/upload-url` + desktop upload loop |
+| 7 | ~~B2 upload / productized PUT~~ | Done — `PUT /api/videos/:id/segments/:index` (API → B2) |
 | 8 | ~~Visibility enforcement~~ | Done on watch loader |
 | 9 | ~~`proxy.ts` public `/watch`~~ | Done |
 | 10 | **Share links UX** | Copy-link from dashboard |
@@ -109,6 +110,7 @@ Live upload + API routes are done. Still open:
 | Task | Notes |
 |------|-------|
 | **Packaging** | Windows/macOS installers, auto-update |
+| **B2 reachability for local API** | On networks that block B2 (e.g. Cisco Umbrella), point desktop at a **cloud-hosted** web API, or allowlist `*.backblazeb2.com` for the API host |
 
 See `apps/desktop/README.md` for local recording + auth + upload setup.
 

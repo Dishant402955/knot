@@ -119,10 +119,10 @@ The single backend for browser and desktop.
 | Desktop API | Route Handlers under `app/api/` |
 | Auth | Clerk (`@clerk/nextjs`) |
 | Persistence | Drizzle ORM → PostgreSQL |
-| Media | Presigned upload URLs + signed playback URLs |
+| Media | Chunk body upload via API + signed GET for playback |
 
 - **Server Actions** handle dashboard mutations (folders, video metadata).
-- **API Routes** serve the desktop app (upload URLs, segment registration, status).
+- **API Routes** serve the desktop app (`PUT` segment bytes → B2, status PATCH).
 
 ### Dashboard (implemented today)
 
@@ -133,9 +133,10 @@ The single backend for browser and desktop.
 | Folders | `/dashboard/folders` (root list), `/dashboard/folder/:id` (detail); grid or list view; nested CRUD with breadcrumbs |
 | Settings | `/dashboard/settings` — Clerk `UserProfile` (account, security) |
 | Notifications | `/dashboard/notifications` — read-only list + empty state |
-| Videos | `/dashboard/videos` — list only; no create/edit yet |
+| Videos | `/dashboard/videos` — grid/list + create/edit/delete + watch links |
+| Nav feel | Soft navigations use `loading.tsx` + client router `staleTimes`; dialogs code-split on open |
 
-For remaining web work (video CRUD, watch page, share links, etc.), see [Project Status](./project-status.md#remaining--web-app).
+For remaining web work (share links, comments, etc.), see [Project Status](./project-status.md#remaining--web-app).
 
 Folder mutations enforce same-level unique names, block circular parent moves, and recursively delete subfolders. Videos in a deleted folder get `folderId` set to null (DB `onDelete: set null`).
 

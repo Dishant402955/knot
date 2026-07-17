@@ -86,7 +86,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               size="lg"
               className="hover:bg-transparent active:bg-transparent"
             >
-              <Link href="/dashboard">
+              <Link href="/dashboard" prefetch>
                 <LogoMark className="size-7" />
 
                 <span className="font-extrabold text-lg">Knot</span>
@@ -113,7 +113,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     tooltip={item.title}
                     className="h-9 text-[15px]"
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} prefetch>
                       <Icon className="size-5" />
 
                       <span>{item.title}</span>

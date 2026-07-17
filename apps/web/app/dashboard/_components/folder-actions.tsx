@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import {
@@ -13,9 +14,22 @@ import { Button } from "@/components/ui/button";
 
 import { FolderPlus, MoreVertical, Pencil, Trash2 } from "lucide-react";
 
-import { CreateFolder } from "./create-folder";
-import { DeleteFolder } from "./delete-folder";
-import { EditFolder } from "./edit-folder";
+const EditFolder = dynamic(
+  () => import("./edit-folder").then((mod) => ({ default: mod.EditFolder })),
+  { ssr: false },
+);
+
+const CreateFolder = dynamic(
+  () =>
+    import("./create-folder").then((mod) => ({ default: mod.CreateFolder })),
+  { ssr: false },
+);
+
+const DeleteFolder = dynamic(
+  () =>
+    import("./delete-folder").then((mod) => ({ default: mod.DeleteFolder })),
+  { ssr: false },
+);
 
 const FolderActions = ({
   id,
@@ -88,31 +102,37 @@ const FolderActions = ({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <EditFolder
-        id={id}
-        name={name}
-        parentId={parentId}
-        folders={folders}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        showTrigger={false}
-      />
+      {editOpen ? (
+        <EditFolder
+          id={id}
+          name={name}
+          parentId={parentId}
+          folders={folders}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          showTrigger={false}
+        />
+      ) : null}
 
-      <CreateFolder
-        folders={folders}
-        parentId={id}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        showTrigger={false}
-      />
+      {createOpen ? (
+        <CreateFolder
+          folders={folders}
+          parentId={id}
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          showTrigger={false}
+        />
+      ) : null}
 
-      <DeleteFolder
-        id={id}
-        redirectTo={redirectTo}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        showTrigger={false}
-      />
+      {deleteOpen ? (
+        <DeleteFolder
+          id={id}
+          redirectTo={redirectTo}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          showTrigger={false}
+        />
+      ) : null}
     </>
   );
 };

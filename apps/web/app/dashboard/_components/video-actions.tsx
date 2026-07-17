@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -13,8 +14,15 @@ import {
 
 import { ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react";
 
-import { DeleteVideo } from "./delete-video";
-import { EditVideo } from "./edit-video";
+const EditVideo = dynamic(
+  () => import("./edit-video").then((mod) => ({ default: mod.EditVideo })),
+  { ssr: false },
+);
+
+const DeleteVideo = dynamic(
+  () => import("./delete-video").then((mod) => ({ default: mod.DeleteVideo })),
+  { ssr: false },
+);
 
 const VideoActions = ({
   id,
@@ -84,24 +92,28 @@ const VideoActions = ({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <EditVideo
-        id={id}
-        title={title}
-        description={description}
-        visibility={visibility}
-        folderId={folderId}
-        folders={folders}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        showTrigger={false}
-      />
+      {editOpen ? (
+        <EditVideo
+          id={id}
+          title={title}
+          description={description}
+          visibility={visibility}
+          folderId={folderId}
+          folders={folders}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          showTrigger={false}
+        />
+      ) : null}
 
-      <DeleteVideo
-        id={id}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        showTrigger={false}
-      />
+      {deleteOpen ? (
+        <DeleteVideo
+          id={id}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          showTrigger={false}
+        />
+      ) : null}
     </>
   );
 };
