@@ -28,6 +28,7 @@ const EmbedPage = async ({
       title={result.video.title}
       initialStatus={result.video.status}
       initialSegments={result.segments}
+      thumbnailUrl={result.video.thumbnailUrl}
     />
   );
 };

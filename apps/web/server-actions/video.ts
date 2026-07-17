@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { db } from "@/db";
 import { folders, videoSegments, videos } from "@/db/schema";
 import { getSignedDownloadUrl, isB2Configured } from "@/lib/b2";
@@ -344,8 +345,9 @@ export type WatchSegment = {
 
 /**
  * Visibility-aware watch payload. Returns 404 (not 403) when access is denied.
+ * Wrapped in React.cache so generateMetadata + page share one fetch per request.
  */
-export const getVideoForWatch = async (videoId: string) => {
+export const getVideoForWatch = cache(async (videoId: string) => {
   try {
     const [video] = await db
       .select()
@@ -387,6 +389,7 @@ export const getVideoForWatch = async (videoId: string) => {
       .orderBy(asc(videoSegments.index));
 
     let playbackSegments: WatchSegment[] = [];
+    let thumbnailUrl: string | null = null;
 
     if (segments.length > 0) {
       if (!isB2Configured()) {
@@ -415,6 +418,14 @@ export const getVideoForWatch = async (videoId: string) => {
       }
     }
 
+    if (video.thumbnailKey && isB2Configured()) {
+      try {
+        thumbnailUrl = await getSignedDownloadUrl(video.thumbnailKey);
+      } catch {
+        thumbnailUrl = null;
+      }
+    }
+
     return {
       success: true as const,
       status: 200,
@@ -428,6 +439,7 @@ export const getVideoForWatch = async (videoId: string) => {
         ownerUserId: video.userId,
         durationSeconds: video.durationSeconds,
         segmentCount: video.segmentCount,
+        thumbnailUrl,
         isOwner,
       },
       segments: playbackSegments,
@@ -440,21 +452,121 @@ export const getVideoForWatch = async (videoId: string) => {
       message: "Internal server Error.",
     };
   }
-};
+});
 
-/** Lightweight poll endpoint for progressive playback while recording. */
-export const getWatchPlaybackState = async (videoId: string) => {
-  const result = await getVideoForWatch(videoId);
+/**
+ * Progressive-playback poll. Only signs URLs for segments the client does not
+ * already have (`index >= knownSegmentCount`), avoiding full re-sign every tick.
+ */
+export const getWatchPlaybackState = async (
+  videoId: string,
+  knownSegmentCount = 0,
+) => {
+  try {
+    const [video] = await db
+      .select({
+        id: videos.id,
+        userId: videos.userId,
+        visibility: videos.visibility,
+        status: videos.status,
+      })
+      .from(videos)
+      .where(eq(videos.id, videoId))
+      .limit(1);
 
-  if (!result.success) {
-    return result;
+    if (!video) {
+      return {
+        success: false as const,
+        status: 404,
+        message: "Video not found.",
+      };
+    }
+
+    const { userId: authUserId } = await auth();
+    const isOwner = authUserId === video.userId;
+
+    if (video.visibility === "PRIVATE" && !isOwner) {
+      return {
+        success: false as const,
+        status: 404,
+        message: "Video not found.",
+      };
+    }
+
+    if (video.visibility === "AUTHENTICATED" && !authUserId) {
+      return {
+        success: false as const,
+        status: 401,
+        message: "Sign in required.",
+      };
+    }
+
+    const segmentRows = await db
+      .select({
+        index: videoSegments.index,
+        durationSeconds: videoSegments.durationSeconds,
+        storageKey: videoSegments.storageKey,
+      })
+      .from(videoSegments)
+      .where(eq(videoSegments.videoId, videoId))
+      .orderBy(asc(videoSegments.index));
+
+    const segmentCount = segmentRows.length;
+    const known = Math.max(0, Math.floor(knownSegmentCount));
+
+    if (segmentCount === 0) {
+      return {
+        success: true as const,
+        status: 200,
+        statusLabel: video.status,
+        segmentCount: 0,
+        segments: [] as WatchSegment[],
+      };
+    }
+
+    if (!isB2Configured()) {
+      return {
+        success: false as const,
+        status: 503,
+        message:
+          "Playback storage is not configured. Set B2_KEY_ID, B2_APPLICATION_KEY, and B2_BUCKET.",
+      };
+    }
+
+    const toSign = segmentRows.filter((row) => row.index >= known);
+
+    let playbackSegments: WatchSegment[] = [];
+
+    if (toSign.length > 0) {
+      try {
+        playbackSegments = await Promise.all(
+          toSign.map(async (segment) => ({
+            index: segment.index,
+            durationSeconds: segment.durationSeconds,
+            url: await getSignedDownloadUrl(segment.storageKey),
+          })),
+        );
+      } catch {
+        return {
+          success: false as const,
+          status: 503,
+          message: "Could not sign playback URLs.",
+        };
+      }
+    }
+
+    return {
+      success: true as const,
+      status: 200,
+      statusLabel: video.status,
+      segmentCount,
+      segments: playbackSegments,
+    };
+  } catch {
+    return {
+      success: false as const,
+      status: 500,
+      message: "Internal server Error.",
+    };
   }
-
-  return {
-    success: true as const,
-    status: 200,
-    statusLabel: result.video.status,
-    segmentCount: result.segments.length,
-    segments: result.segments,
-  };
 };

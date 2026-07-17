@@ -2,7 +2,10 @@
 
 import { db } from "@/db";
 import { comments, notifications, videos } from "@/db/schema";
-import { resolveMentionedUserIds } from "@/lib/clerk-users";
+import {
+  getCommentAuthorProfiles,
+  resolveMentionedUserIds,
+} from "@/lib/clerk-users";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -52,6 +55,27 @@ export type WatchComment = {
   createdAt: Date;
   updatedAt: Date;
   isOwn: boolean;
+  authorDisplayName: string;
+  authorUsername: string | null;
+  authorImageUrl: string | null;
+};
+
+const authorFromCurrentUser = (user: {
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  imageUrl: string;
+}): Pick<
+  WatchComment,
+  "authorDisplayName" | "authorUsername" | "authorImageUrl"
+> => {
+  const full = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  const username = user.username?.trim() || null;
+  return {
+    authorDisplayName: full || username || "You",
+    authorUsername: username,
+    authorImageUrl: user.imageUrl || null,
+  };
 };
 
 export const getCommentsForVideo = async (videoId: string) => {
@@ -71,16 +95,24 @@ export const getCommentsForVideo = async (videoId: string) => {
       .where(eq(comments.videoId, videoId))
       .orderBy(asc(comments.createdAt));
 
-    const data: WatchComment[] = rows.map((row) => ({
-      id: row.id,
-      videoId: row.videoId,
-      userId: row.userId,
-      text: row.text,
-      timestampSeconds: row.timestampSeconds,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      isOwn: access.authUserId === row.userId,
-    }));
+    const profiles = await getCommentAuthorProfiles(rows.map((r) => r.userId));
+
+    const data: WatchComment[] = rows.map((row) => {
+      const profile = profiles.get(row.userId);
+      return {
+        id: row.id,
+        videoId: row.videoId,
+        userId: row.userId,
+        text: row.text,
+        timestampSeconds: row.timestampSeconds,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        isOwn: access.authUserId === row.userId,
+        authorDisplayName: profile?.displayName ?? "Viewer",
+        authorUsername: profile?.username ?? null,
+        authorImageUrl: profile?.imageUrl ?? null,
+      };
+    });
 
     return {
       success: true as const,
@@ -214,6 +246,7 @@ export const createComment = async ({
         createdAt: comment.createdAt,
         updatedAt: comment.updatedAt,
         isOwn: true,
+        ...authorFromCurrentUser(user),
       } satisfies WatchComment,
       message: "Comment posted.",
     };

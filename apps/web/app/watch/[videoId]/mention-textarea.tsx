@@ -24,6 +24,8 @@ type MentionTextareaProps = {
   disabled?: boolean;
   rows?: number;
   maxLength?: number;
+  /** Ctrl/Cmd+Enter when the mention list is closed. */
+  onSubmitShortcut?: () => void;
 };
 
 type ActiveMention = {
@@ -54,6 +56,7 @@ const MentionTextarea = ({
   disabled,
   rows = 3,
   maxLength = 2000,
+  onSubmitShortcut,
 }: MentionTextareaProps) => {
   const listId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -71,14 +74,19 @@ const MentionTextarea = ({
     }
   }, []);
 
+  const activeQuery = active?.query ?? "";
+
   useEffect(() => {
-    if (!active || active.query.length < 2) return;
+    if (!active || activeQuery.length < 2) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setLoading(true);
       void searchMentionUsers({
-        query: active.query,
+        query: activeQuery,
         visibility,
         ownerUserId,
       }).then((res) => {
@@ -97,7 +105,7 @@ const MentionTextarea = ({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [active, ownerUserId, visibility]);
+  }, [active, activeQuery, ownerUserId, visibility]);
 
   const insertMention = (user: MentionUser) => {
     if (!active) return;
@@ -119,6 +127,17 @@ const MentionTextarea = ({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      onSubmitShortcut &&
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      !(active && users.length > 0)
+    ) {
+      event.preventDefault();
+      onSubmitShortcut();
+      return;
+    }
+
     if (!active || users.length === 0) return;
 
     if (event.key === "ArrowDown") {

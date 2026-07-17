@@ -76,12 +76,12 @@ const VideoShareActions = ({
   return (
     <>
       {layout === "buttons" ? (
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto sm:justify-end">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="cursor-pointer"
+            className="cursor-pointer flex-1 sm:flex-none"
             onClick={() => void copyShareLink()}
           >
             <Copy className="mr-1.5 h-4 w-4" />
@@ -91,7 +91,7 @@ const VideoShareActions = ({
             type="button"
             variant="outline"
             size="sm"
-            className="cursor-pointer"
+            className="cursor-pointer flex-1 sm:flex-none"
             onClick={() => {
               if (!canEmbed) {
                 toast.error("Embed requires Public visibility", {

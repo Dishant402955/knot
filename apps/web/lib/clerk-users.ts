@@ -107,3 +107,56 @@ export const getUserMentionProfile = async (
     return null;
   }
 };
+
+export type CommentAuthorProfile = {
+  displayName: string;
+  username: string | null;
+  imageUrl: string | null;
+};
+
+const displayNameFromClerkUser = (user: {
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}): string => {
+  const full = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  if (user.username?.trim()) return user.username.trim();
+  return "Viewer";
+};
+
+/**
+ * Batch-resolve Clerk profiles for comment author IDs (chunks of 100).
+ */
+export const getCommentAuthorProfiles = async (
+  userIds: string[],
+): Promise<Map<string, CommentAuthorProfile>> => {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  const map = new Map<string, CommentAuthorProfile>();
+  if (unique.length === 0) return map;
+
+  try {
+    const client = await clerkClient();
+    const chunkSize = 100;
+
+    for (let i = 0; i < unique.length; i += chunkSize) {
+      const chunk = unique.slice(i, i + chunkSize);
+      const list = await client.users.getUserList({
+        userId: chunk,
+        limit: chunk.length,
+      });
+
+      for (const user of list.data) {
+        map.set(user.id, {
+          displayName: displayNameFromClerkUser(user),
+          username: user.username?.trim() || null,
+          imageUrl: user.imageUrl ?? null,
+        });
+      }
+    }
+  } catch {
+    // Fall back to empty map — callers use "Viewer".
+  }
+
+  return map;
+};

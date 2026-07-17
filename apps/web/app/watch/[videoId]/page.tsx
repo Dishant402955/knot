@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -9,11 +10,39 @@ import { getVideoForWatch } from "@/server-actions/video";
 
 import { ArrowLeft } from "lucide-react";
 
-const WatchPage = async ({
-  params,
-}: {
+type WatchPageProps = {
   params: Promise<{ videoId: string }>;
-}) => {
+};
+
+export const generateMetadata = async ({
+  params,
+}: WatchPageProps): Promise<Metadata> => {
+  const { videoId } = await params;
+  const result = await getVideoForWatch(videoId);
+
+  if (!result.success) {
+    return { title: "Video · Knot", robots: { index: false } };
+  }
+
+  return {
+    title: `${result.video.title} · Knot`,
+    description:
+      result.video.description?.slice(0, 160) ||
+      "Watch this Knot recording",
+    openGraph: result.video.thumbnailUrl
+      ? {
+          title: result.video.title,
+          images: [{ url: result.video.thumbnailUrl }],
+        }
+      : undefined,
+    robots:
+      result.video.visibility === "PUBLIC"
+        ? { index: true, follow: true }
+        : { index: false, follow: false },
+  };
+};
+
+const WatchPage = async ({ params }: WatchPageProps) => {
   const { videoId } = await params;
   const result = await getVideoForWatch(videoId);
 
@@ -29,15 +58,23 @@ const WatchPage = async ({
     }
 
     return (
-      <div className="px-15 py-20 space-y-4">
-        <p className="font-bold text-2xl">Playback unavailable</p>
-        <p className="text-sm text-muted-foreground">{result.message}</p>
-        <Button asChild variant="ghost" size="sm" className="cursor-pointer px-0">
-          <Link href="/dashboard/videos">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to videos
-          </Link>
-        </Button>
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
+        <div className="space-y-4">
+          <p className="text-2xl font-bold">Playback unavailable</p>
+          <p className="text-sm text-muted-foreground">{result.message}</p>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="cursor-pointer px-0"
+          >
+            <Link href="/dashboard/videos">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to videos
+            </Link>
+          </Button>
+        </div>
+        <Toaster />
       </div>
     );
   }
@@ -53,23 +90,36 @@ const WatchPage = async ({
       : false;
 
   return (
-    <div className="min-h-screen">
-      <div className="border-b">
-        <div className="flex items-center justify-between px-15 py-4">
-          <Button asChild variant="ghost" size="sm" className="cursor-pointer px-0">
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="cursor-pointer -ml-2"
+          >
             <Link href={result.video.isOwner ? "/dashboard/videos" : "/"}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              {result.video.isOwner ? "Videos" : "Home"}
+              <span className="hidden sm:inline">
+                {result.video.isOwner ? "Videos" : "Home"}
+              </span>
+              <span className="sm:hidden">Back</span>
             </Link>
           </Button>
 
-          <Link href="/" className="font-bold text-lg">
+          <Link
+            href="/"
+            className="font-bold tracking-tight text-foreground hover:opacity-80"
+          >
             Knot
           </Link>
-        </div>
-      </div>
 
-      <div className="px-15 pb-15 pt-10">
+          <div className="w-16 sm:w-20" aria-hidden />
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <ProgressivePlayer
           videoId={result.video.id}
           title={result.video.title}
@@ -78,12 +128,14 @@ const WatchPage = async ({
           visibility={result.video.visibility}
           shareSlug={result.video.shareSlug}
           ownerUserId={result.video.ownerUserId}
+          durationSeconds={result.video.durationSeconds}
+          thumbnailUrl={result.video.thumbnailUrl}
           initialSegments={result.segments}
           initialComments={comments}
           canComment={canComment}
           isOwner={result.video.isOwner}
         />
-      </div>
+      </main>
 
       <Toaster />
     </div>
