@@ -1,32 +1,40 @@
+/**
+ * Legacy B2 upload smoke-test script.
+ * Prefer importing from `@/lib/b2` for product code (signed downloads).
+ *
+ * Run manually with: pnpm exec tsx server-actions/b2.ts
+ */
 import "dotenv/config";
 
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
 import mime from "mime-types";
 
-const BUCKET_NAME = "my-bucket-48715616406dg5d1fg2df1hGDhF";
-
-const s3 = new S3Client({
-  endpoint: "https://s3.us-east-005.backblazeb2.com",
-  region: "us-east-005",
-  credentials: {
-    accessKeyId: process.env.B2_KEY_ID!,
-    secretAccessKey: process.env.B2_APPLICATION_KEY!,
-  },
-});
+const BUCKET_NAME = process.env.B2_BUCKET;
 
 async function uploadFile(filePath: string) {
+  if (!BUCKET_NAME) {
+    throw new Error("B2_BUCKET is not set");
+  }
+
   if (!fs.existsSync(filePath)) {
     throw new Error(`File does not exist: ${filePath}`);
   }
 
+  const s3 = new S3Client({
+    endpoint:
+      process.env.B2_ENDPOINT || "https://s3.us-east-005.backblazeb2.com",
+    region: process.env.B2_REGION || "us-east-005",
+    credentials: {
+      accessKeyId: process.env.B2_KEY_ID!,
+      secretAccessKey: process.env.B2_APPLICATION_KEY!,
+    },
+  });
+
   const fileName = path.basename(filePath);
-
   const objectKey = `uploads/${Date.now()}-${fileName}`;
-
   const fileStream = fs.createReadStream(filePath);
-
   const contentType = mime.lookup(filePath) || "application/octet-stream";
 
   await s3.send(
@@ -38,28 +46,22 @@ async function uploadFile(filePath: string) {
     }),
   );
 
-  const publicUrl = `https://f005.backblazeb2.com/file/${BUCKET_NAME}/${objectKey}`;
-
-  return {
-    key: objectKey,
-    url: publicUrl,
-  };
+  return { key: objectKey };
 }
 
-// testing purpose
 async function main() {
+  if (!process.argv.includes("--run")) {
+    console.log("Pass --run to execute the B2 upload smoke test.");
+    return;
+  }
+
   try {
-    // this path is from relative to web - means think like you are in web folder and then set the path
     const filePath = "./tsconfig.json";
-
     const result = await uploadFile(filePath);
-
-    console.log("\nUpload Successful");
-    console.log("Key:", result.key);
-    console.log("URL:", result.url);
+    console.log("Upload Successful", result);
   } catch (error) {
-    console.error("\nUpload Failed");
-    console.error(error);
+    console.error("Upload Failed", error);
   }
 }
-main();
+
+void main();

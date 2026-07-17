@@ -12,9 +12,9 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 | Auth (Clerk) — desktop | Done (same Clerk app; `knot://app/` native OAuth) |
 | Dashboard shell + sidebar | Done |
 | Folders (CRUD + UI) | Done |
-| Videos (metadata) | Partial |
-| B2 storage | Prototype only |
-| Watch page & playback | Not started |
+| Videos (metadata) | Done (CRUD + folder assignment) |
+| B2 storage | Signed GET for playback; upload API still pending |
+| Watch page & playback | Done (sequential progressive WebM) |
 | Share links | Not started |
 | Comments & notifications | Partial (list UI only) |
 | API routes (desktop) | Not started |
@@ -32,7 +32,9 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 - **Auth (web)** — Clerk provider, sign-in/sign-up pages, `proxy.ts` route protection (Next.js 16), `currentUser()` guards in folder server actions, post-login redirect to `/dashboard`.
 - **Dashboard** — layout with header bar (sidebar trigger + `UserButton`), icon-collapsible sidebar with active-route highlight, home page with recent folders/videos and shared grid/list toggle, notifications list page, settings (`UserProfile`).
 - **Folders** — full CRUD, nested folders, duplicate-name validation, root list page, detail page (`/dashboard/folder/:id`), breadcrumbs, grid/list view toggle, folder cards + rows, 3-dot actions menu, real video counts, recursive delete.
-- **Videos (metadata)** — `getAllUserVideos`, videos list page (read-only), video row component for list view.
+- **Videos** — create / edit / delete metadata, visibility, folder assignment; dashboard list with grid/list; cards link to `/watch/[id]`.
+- **Watch page** — `/watch/[videoId]` with visibility enforcement (`PRIVATE` 404, `PUBLIC` open, `AUTHENTICATED` requires sign-in); sequential progressive playback of independently playable WebM segments via B2 signed GET URLs; polls for new segments while `RECORDING` / `PROCESSING`.
+- **B2 helper** — `apps/web/lib/b2.ts` signed download URLs (upload/presign still next).
 - **Notifications** — `getAllUserNotifications`, list page with empty state (read-only).
 - **Desktop (Phase A+)** — Electron app in `apps/desktop`: source picker (screen/window/region), mic + system audio, webcam overlay (drag/resize, circle/square/rectangle), canvas compositing, independently playable ~5s WebM chunks on disk, countdown gated behind a ready indicator tray, capture prepared during countdown for instant start at 0, pause/resume/stop, screenshots, tray + global shortcuts. Clerk desktop auth (`@clerk/electron`, same keys as web, `knot://app/` OAuth redirect, offline continue).
 
@@ -52,20 +54,20 @@ Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url
 
 | # | Task | Notes |
 |---|------|-------|
-| 2 | **Video metadata CRUD** | Create / edit / delete server actions + UI on videos page, folder detail, optional video detail page |
-| 3 | **Folder assignment** | Wire `folderId` so videos can be organized into folders (schema exists, not used in app) |
-| 4 | **Videos page polish** | Grid/list toggle (like folders), actions menu, richer empty states |
-| 5 | **Folder detail — videos section** | Grid/list toggle + video actions once CRUD exists; read-only cards today |
+| 2 | ~~Video metadata CRUD~~ | Done |
+| 3 | ~~Folder assignment~~ | Done |
+| 4 | **Videos page polish** | Thumbnails, richer empty states |
+| 5 | ~~Folder detail — videos section~~ | Actions + watch links wired |
 
 ### Core product — playback & sharing
 
 | # | Task | Notes |
 |---|------|-------|
-| 6 | **Watch page** (`/watch/[videoId]`) | Load video + segments; progressive playback (MSE); poll for new chunks while `RECORDING`; "still recording" UI |
-| 7 | **B2 playback integration** | Signed GET URLs for chunks and thumbnails (upload prototype exists; playback not productized) |
-| 8 | **Visibility enforcement** | `PRIVATE` / `PUBLIC` / `AUTHENTICATED` checks before serving watch page or signed URLs |
-| 9 | **`proxy.ts` public routes** | Allow `/watch/:id` without sign-in for public videos; short links (`/r/[slug]`) later |
-| 10 | **Share links UX** | Copy-link from dashboard; open watch page |
+| 6 | ~~Watch page~~ | Done — sequential progressive player |
+| 7 | **B2 upload / productized PUT** | Signed GET done; desktop upload loop still needed |
+| 8 | ~~Visibility enforcement~~ | Done on watch loader |
+| 9 | ~~`proxy.ts` public `/watch`~~ | Done |
+| 10 | **Share links UX** | Copy-link from dashboard |
 
 ### Social & notifications
 
@@ -78,7 +80,7 @@ Everything below is web-only work. Desktop API routes (`/api/videos`, upload-url
 
 | # | Task | Notes |
 |---|------|-------|
-| 13 | **Watch-page auth rules** | Public route exceptions + visibility logic in `proxy.ts` and watch page |
+| 13 | ~~Watch-page auth rules~~ | Done in `proxy.ts` + `getVideoForWatch` |
 
 ### Polish & infra
 
@@ -128,8 +130,8 @@ See `apps/desktop/README.md` for local recording + auth setup.
 - Post-login redirect to `/dashboard`
 
 **Remaining (web):**
-- Public routes in `proxy.ts` for `/watch/:id` (and later `/r/[slug]`)
-- Visibility checks on watch page (`PUBLIC` / `AUTHENTICATED` / `PRIVATE`)
+- Short links (`/r/[slug]`) later
+- Share-link copy UX from dashboard
 
 **Desktop (done for Phase A+):**
 - `@clerk/electron` bridge, OS keychain token storage
@@ -148,17 +150,14 @@ See `apps/desktop/README.md` for local recording + auth setup.
 | Path | State |
 |------|-------|
 | `apps/web/db/schema.ts` | Complete schema |
-| `apps/web/drizzle/` | Empty — migrations not generated |
 | `apps/web/server-actions/folder.ts` | Full CRUD + `getFolderById` |
-| `apps/web/server-actions/video.ts` | List only |
-| `apps/web/server-actions/notification.ts` | List only |
-| `apps/web/server-actions/b2.ts` | Dev test script |
-| `apps/web/proxy.ts` | Clerk route protection (Next.js 16 — correct filename) |
-| `apps/web/app/dashboard/_components/` | Folder UI (card, row, actions, view toggle, breadcrumb), video row, dashboard sections + sidebar |
-| `apps/web/app/dashboard/folders/page.tsx` | Root folders list |
-| `apps/web/app/dashboard/folder/[id]/page.tsx` | Folder detail (subfolders, videos read-only) |
-| `apps/web/app/dashboard/videos/page.tsx` | List only |
+| `apps/web/server-actions/video.ts` | Full CRUD + `getVideoForWatch` / poll |
+| `apps/web/lib/b2.ts` | Signed B2 GET URLs |
+| `apps/web/server-actions/b2.ts` | Manual upload smoke test (`--run`) |
+| `apps/web/proxy.ts` | Clerk protection; `/watch` public |
+| `apps/web/app/watch/[videoId]/` | Watch page + progressive player |
+| `apps/web/app/dashboard/videos/page.tsx` | CRUD list |
+| `apps/web/app/dashboard/folder/[id]/page.tsx` | Folder detail (videos + actions) |
 | `apps/web/app/dashboard/notifications/page.tsx` | List + empty state |
-| `apps/web/app/dashboard/page.tsx` | Recent folders + videos with grid/list toggle |
-| `apps/desktop/` | Phase A+ recorder (local playable chunks, Clerk auth, tray/countdown) |
-| `apps/web/app/watch/` | Not started |
+| `apps/web/app/dashboard/page.tsx` | Recent folders + videos |
+| `apps/desktop/` | Phase A+ recorder |

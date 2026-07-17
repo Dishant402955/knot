@@ -27,6 +27,8 @@ type ViewVideo = {
   title: string;
   description: string | null;
   status: string;
+  visibility: "PRIVATE" | "PUBLIC" | "AUTHENTICATED";
+  folderId: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -132,9 +134,13 @@ const DashboardSections = ({
               {recentVideos.map((video) => (
                 <VideoCard
                   key={video.id}
+                  id={video.id}
                   title={video.title}
                   description={video.description}
-                  footer={video.status}
+                  status={video.status}
+                  visibility={video.visibility}
+                  folderId={video.folderId}
+                  folders={allFolders}
                 />
               ))}
             </div>
@@ -143,11 +149,15 @@ const DashboardSections = ({
               {recentVideos.map((video) => (
                 <VideoRow
                   key={video.id}
+                  id={video.id}
                   title={video.title}
                   description={video.description}
                   status={video.status}
+                  visibility={video.visibility}
+                  folderId={video.folderId}
                   createdAt={video.createdAt}
                   updatedAt={video.updatedAt}
+                  folders={allFolders}
                 />
               ))}
             </div>

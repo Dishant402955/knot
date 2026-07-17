@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 
 import { CreateFolder } from "@/app/dashboard/_components/create-folder";
+import { CreateVideo } from "@/app/dashboard/_components/create-video";
 import { DeleteFolder } from "@/app/dashboard/_components/delete-folder";
 import { EditFolder } from "@/app/dashboard/_components/edit-folder";
 import { FolderBreadcrumb } from "@/app/dashboard/_components/folder-breadcrumb";
 import { FoldersView } from "@/app/dashboard/_components/folders-view";
-import { VideoCard } from "@/app/dashboard/_components/video-card";
+import { VideosView } from "@/app/dashboard/_components/videos-view";
 
 import { Button } from "@/components/ui/button";
 
@@ -60,7 +61,8 @@ const FolderDetailPage = async ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <CreateVideo folders={folders} folderId={folder.id} />
             <CreateFolder folders={folders} parentId={folder.id} />
 
             <EditFolder
@@ -89,24 +91,12 @@ const FolderDetailPage = async ({
         emptyText="No subfolders."
       />
 
-      <div className="space-y-4">
-        <p className="font-semibold text-lg">Videos</p>
-
-        <div className="flex flex-wrap gap-5">
-          {videos && videos.length > 0 ? (
-            videos.map((video) => (
-              <VideoCard
-                key={video.id}
-                title={video.title}
-                description={video.description}
-                footer={video.status}
-              />
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">No videos in this folder.</p>
-          )}
-        </div>
-      </div>
+      <VideosView
+        title="Videos"
+        videos={videos ?? []}
+        folders={folders}
+        emptyText="No videos in this folder."
+      />
     </div>
   );
 };

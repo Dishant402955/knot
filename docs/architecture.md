@@ -147,11 +147,11 @@ Route: `/watch/[videoId]` (or short link `/r/[slug]`).
 1. Load video + available segments from Postgres.
 2. Enforce visibility (see §6).
 3. Issue signed B2 GET URLs for available chunks.
-4. Play chunk 0 immediately; append new chunks as they arrive.
-   - **MVP:** Media Source Extensions (append WebM chunks).
-   - **V1:** server-generated HLS manifest for better seeking.
+4. Play chunk 0 immediately; continue through later chunks as they arrive.
+   - **MVP:** sequential `<video>` playlist of independently playable WebM segments (matches desktop chunk format).
+   - **V1:** server-generated HLS manifest (or remuxed MSE) for better seeking.
    - Show a "still recording" indicator while `status !== READY`.
-
+   - Poll for new segments while recording.
 ---
 
 ## 4. Desktop App (`apps/desktop`)
