@@ -61,10 +61,20 @@ Full details: [docs/architecture.md](./docs/architecture.md)
 
 ## Documentation
 
+Start with the human handbook index:
+
+**[docs/README.md](./docs/README.md)** — what to read when, and a one-paragraph product overview.
+
 | Document | Description |
 |----------|-------------|
-| [Architecture](./docs/architecture.md) | Full technical design — system, the instant-cloud-preview loop, web & desktop apps, storage, auth & sharing, and data model |
-| [Project Status](./docs/project-status.md) | What's done vs. what remains, and the build order |
+| [Getting started](./docs/getting-started.md) | First-time local setup (Clerk, DB, B2, web, desktop) |
+| [Environment variables](./docs/environment.md) | Every env key explained |
+| [Codebase map](./docs/codebase-map.md) | Where to edit features |
+| [Operations](./docs/operations.md) | Migrations, deploy, packaging, troubleshooting |
+| [Architecture](./docs/architecture.md) | Full technical design |
+| [Project status](./docs/project-status.md) | Done vs optional remaining + intentional decisions |
+| [B2 production](./docs/b2-production.md) | Bucket, CORS, production assert |
+| [Desktop README](./apps/desktop/README.md) | Recorder + packaging detail |
 
 ## Getting Started
 
@@ -115,7 +125,7 @@ pnpm --filter desktop dev
 # or: pnpm dev:desktop
 ```
 
-Desktop records locally (independently playable ~5s WebM chunks), supports Clerk sign-in, and uploads to the web API while recording when signed in. Packaging: see [Desktop README § Packaging](./apps/desktop/README.md#packaging-installers). Status: [Project Status](./docs/project-status.md).
+Desktop records locally (independently playable ~5s WebM chunks), supports Clerk sign-in, and uploads to the web API while recording when signed in. Packaging: see [Desktop README § Packaging](./apps/desktop/README.md#packaging-installers). Full handbook: [docs/README.md](./docs/README.md).
 
 ## License
 

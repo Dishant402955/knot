@@ -2,7 +2,8 @@
 
 Complete technical design for Knot — a Loom-style async video platform. Record your screen, upload chunks to the cloud **while recording**, and share a link viewers can watch immediately.
 
-For what's built vs. planned, see [Project Status](./project-status.md).
+For what's built vs optional remaining work, see [Project Status](./project-status.md).  
+For hands-on setup, see [Getting started](./getting-started.md) and the [docs index](./README.md).
 
 ---
 
@@ -30,7 +31,8 @@ flowchart TB
     Web --> API
     Desktop --> API
     API --> PG
-    Desktop -->|chunk upload during recording| B2
+    Desktop -->|chunk bytes via API| API
+    API -->|PutObject| B2
     Web -->|progressive signed URLs| B2
 ```
 
@@ -67,7 +69,7 @@ This is what makes Knot feel like Loom: **recording, uploading, and watching all
 
 1. User starts recording. A video row is created (`status: RECORDING`).
 2. `MediaRecorder` emits a chunk every **3–5 seconds**.
-3. Each chunk is immediately uploaded to B2 (via a presigned URL) and registered in Postgres — **while recording continues**.
+3. Each chunk is immediately uploaded **to the Next.js API** (which writes to B2) and registered in Postgres — **while recording continues**.
 4. The share link works as soon as the first chunk lands, so a viewer can start watching before recording even finishes.
 5. As the viewer plays, the web player keeps fetching newly uploaded chunks. Because upload started during recording, playback usually catches up before the viewer reaches the end.
 
@@ -136,7 +138,7 @@ The single backend for browser and desktop.
 | Videos | `/dashboard/videos` — grid/list + create/edit/delete + watch links |
 | Nav feel | Soft navigations use `loading.tsx` + client router `staleTimes`; dialogs code-split on open |
 
-For remaining web work (thumbnails generation, production B2, short links), see [Project Status](./project-status.md#remaining--web-app).
+For remaining optional work, see [Project Status](./project-status.md).
 
 Folder mutations enforce same-level unique names, block circular parent moves, and recursively delete subfolders. Videos in a deleted folder get `folderId` set to null (DB `onDelete: set null`).
 
@@ -209,9 +211,9 @@ Single identity provider for web and desktop.
 - **Desktop:** Clerk session token sent as a bearer token; verified in API routes.
 - **Server:** `currentUser()` guard on every protected action.
 
-**Public routes (middleware):** `/`, `/sign-in`, `/sign-up`, `/watch/:id`, `/r/:slug`.  
+**Public routes (middleware in `proxy.ts`):** `/`, `/sign-in`, `/sign-up`, `/watch(.*)`, `/r/(.*)`, `/embed(.*)`.  
 Visibility (`PRIVATE` / `PUBLIC` / `AUTHENTICATED`) is enforced in `getVideoForWatch` / comments — and again on `/r/:slug` **before** redirect — so private short links never leak the video UUID via `Location`.
-**Protected:** `/dashboard/**`, `/api/**`.
+**Protected:** `/dashboard/**`, `/api/**` (Clerk session cookie or `Authorization: Bearer`).
 
 ### Visibility model
 

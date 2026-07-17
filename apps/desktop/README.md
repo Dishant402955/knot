@@ -2,6 +2,8 @@
 
 Electron recorder for Knot — screen/window/region capture, webcam overlay, and independently playable ~5s WebM chunks saved locally. **Clerk auth** uses the **same env vars** as `apps/web` (Next.js).
 
+Human docs index (setup, env, packaging ops): **[docs/README.md](../../docs/README.md)**.
+
 ## Features
 
 - Source picker: full screen, window, or region

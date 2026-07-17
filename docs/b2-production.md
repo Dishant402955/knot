@@ -1,8 +1,11 @@
 # Production Backblaze B2 setup for Knot
-#
-# Upload path today: Desktop → Next.js API → B2 PutObject (server-side).
-# Playback path: Next.js issues signed GET URLs → browser/Electron loads from B2.
-# The API host must reach *.backblazeb2.com (not blocked by corporate filters).
+
+Upload path today: **Desktop → Next.js API → B2 PutObject** (server-side).  
+Playback path: **Next.js issues signed GET URLs → browser loads from B2**.
+
+The **API host** must reach `*.backblazeb2.com` (not blocked by corporate filters). Desktop does not need B2 allowlisted.
+
+For full local setup, see [getting-started.md](./getting-started.md). For env meanings, see [environment.md](./environment.md).
 
 ## 1. Bucket
 
