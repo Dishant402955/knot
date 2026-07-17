@@ -50,7 +50,7 @@ Web-only follow-ups. Desktop live upload + API routes are done (see [architectur
 
 | # | Task | Notes |
 |---|------|-------|
-| 1 | **Database migrations** | Generate and commit Drizzle migrations; run against Postgres (`drizzle/` is empty) |
+| 1 | ~~**Database migrations**~~ | Done — idempotent baseline in `apps/web/drizzle/`; `pnpm db:migrate` / `db:check` |
 
 ### Dashboard — videos
 

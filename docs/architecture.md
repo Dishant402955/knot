@@ -289,7 +289,14 @@ Ordered chunks uploaded during recording. Progressive playback reads them as the
 - `notifications`: feed with types `COMMENT`, `VIDEO_SHARED`, `RECORDING_READY`, `MENTION`.
 
 ### Migrations
-Drizzle Kit configured in `apps/web/drizzle.config.ts` (output `./drizzle`). Migrations should be generated and committed as the schema evolves.
+Drizzle Kit is configured in `apps/web/drizzle.config.ts` (output `./drizzle`). Baseline migration `0000_*.sql` is **idempotent** (`IF NOT EXISTS` / duplicate-object guards) so applying it against an existing Neon DB does not drop or alter data.
+
+| Script | Purpose |
+|--------|---------|
+| `pnpm db:generate` | Create a new migration from `db/schema.ts` |
+| `pnpm db:migrate` | Apply pending migrations (`scripts/db-migrate.ts`) |
+| `pnpm db:check` | List public tables + row counts (sanity before/after migrate) |
+| `pnpm db:studio` | Drizzle Studio |
 
 ---
 
