@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { folders, videoSegments, videos } from "@/db/schema";
 import { getSignedDownloadUrl, isB2Configured } from "@/lib/b2";
 import { withThumbnailUrls } from "@/lib/thumbnails";
+import { insertVideoWithSlug } from "@/lib/video-insert";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -152,19 +153,16 @@ export const createVideo = async ({
       };
     }
 
-    const [video] = await db
-      .insert(videos)
-      .values({
-        userId: user.id,
-        title: trimmedTitle,
-        description: description?.trim() || null,
-        visibility,
-        folderId: nextFolderId,
-        status: "READY",
-        segmentCount: 0,
-        durationSeconds: 0,
-      })
-      .returning();
+    const video = await insertVideoWithSlug({
+      userId: user.id,
+      title: trimmedTitle,
+      description: description?.trim() || null,
+      visibility,
+      folderId: nextFolderId,
+      status: "READY",
+      segmentCount: 0,
+      durationSeconds: 0,
+    });
 
     revalidateVideoPaths(nextFolderId);
 
@@ -414,6 +412,7 @@ export const getVideoForWatch = async (videoId: string) => {
         description: video.description,
         status: video.status,
         visibility: video.visibility,
+        shareSlug: video.shareSlug,
         durationSeconds: video.durationSeconds,
         segmentCount: video.segmentCount,
         isOwner,

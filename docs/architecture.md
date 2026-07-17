@@ -209,7 +209,8 @@ Single identity provider for web and desktop.
 - **Desktop:** Clerk session token sent as a bearer token; verified in API routes.
 - **Server:** `currentUser()` guard on every protected action.
 
-**Public routes:** `/`, `/sign-in`, `/sign-up`, and `/watch/:id` when the video is `PUBLIC`.
+**Public routes (middleware):** `/`, `/sign-in`, `/sign-up`, `/watch/:id`, `/r/:slug`.  
+Visibility (`PRIVATE` / `PUBLIC` / `AUTHENTICATED`) is enforced in `getVideoForWatch` / comments — and again on `/r/:slug` **before** redirect — so private short links never leak the video UUID via `Location`.
 **Protected:** `/dashboard/**`, `/api/**`.
 
 ### Visibility model
@@ -226,8 +227,9 @@ Default on **dashboard** create: `PRIVATE`. Desktop recording sessions (`POST /a
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/api/videos` | Start recording session (`RECORDING`), return `shareUrl` |
+| `POST` | `/api/videos` | Start recording session (`RECORDING`), return short `shareUrl` (`/r/{slug}`) |
 | `PUT` | `/api/videos/:id/segments/:index` | Upload chunk bytes → B2 PutObject → register |
+| `PUT` | `/api/videos/:id/thumbnail` | Upload JPEG poster → B2 → set `thumbnailKey` |
 | `POST` | `/api/videos/:id/upload-url` | Legacy presigned B2 PUT (avoid; firewall-fragile) |
 | `POST` | `/api/videos/:id/segments` | Legacy register-only (prefer atomic PUT above) |
 | `PATCH` | `/api/videos/:id` | Status transitions (`READY` requires ≥1 segment) |
@@ -273,11 +275,12 @@ Core metadata (binary lives in B2, not Postgres).
 | `folderId?` | FK → folders |
 | `durationSeconds` | Total duration |
 | `segmentCount` | Chunks uploaded so far (grows during recording) |
-| `thumbnailKey?` | B2 key for poster image |
+| `thumbnailKey?` | B2 key for poster image (`{userId}/{videoId}/thumbnail.jpg`) |
+| `shareSlug` | Unique short slug for `/r/{slug}` share links |
 | `status` | `RECORDING` / `PROCESSING` / `READY` / `FAILED` |
 | timestamps | `createdAt`, `updatedAt` |
 
-*Future:* `shareSlug`, `viewCount`, `publishedAt`.
+*Future:* `viewCount`, `publishedAt`.
 
 ### `video_segments`
 Ordered chunks uploaded during recording. Progressive playback reads them as they're registered.
@@ -285,7 +288,7 @@ Ordered chunks uploaded during recording. Progressive playback reads them as the
 `id`, `videoId` (FK, cascade delete), `index` (0-based order), `storageKey`, `durationSeconds`, `size`, `createdAt`. **Unique:** `(videoId, index)`.
 
 ### `comments` / `notifications`
-- `comments`: timestamped feedback (`timestampSeconds` anchors a point in the video). Watch page UI + `server-actions/comment.ts` (create/delete; owner notified via `COMMENT`).
+- `comments`: timestamped feedback (`timestampSeconds` anchors a point in the video). Watch page UI + `server-actions/comment.ts` (create/delete; owner notified via `COMMENT`). `@username` mentions resolve via Clerk and create `MENTION` notifications (skipped for users who cannot access `PRIVATE` videos).
 - `notifications`: feed with types `COMMENT`, `VIDEO_SHARED`, `RECORDING_READY`, `MENTION`. Mark-as-read + sidebar unread count; `RECORDING_READY` created when desktop marks a video `READY`.
 
 ### Migrations

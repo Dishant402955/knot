@@ -113,6 +113,13 @@ export const putSegmentObject = async (
   }
 };
 
+/** Upload JPEG poster image for a video. */
+export const putThumbnailObject = async (
+  storageKey: string,
+  body: Buffer | Uint8Array,
+  contentType = "image/jpeg",
+) => putSegmentObject(storageKey, body, contentType);
+
 export const segmentStorageKey = (
   userId: string,
   videoId: string,
@@ -124,3 +131,4 @@ export const thumbnailStorageKey = (userId: string, videoId: string) =>
 
 export const MAX_SEGMENT_INDEX = 10_000;
 export const MAX_SEGMENT_BYTES = 64 * 1024 * 1024;
+export const MAX_THUMBNAIL_BYTES = 512 * 1024;

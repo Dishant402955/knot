@@ -23,6 +23,7 @@ const VideoCard = ({
   visibility,
   folderId,
   thumbnailUrl = null,
+  shareSlug = null,
   folders = [],
 }: {
   id: string;
@@ -32,6 +33,7 @@ const VideoCard = ({
   visibility: "PRIVATE" | "PUBLIC" | "AUTHENTICATED";
   folderId: string | null;
   thumbnailUrl?: string | null;
+  shareSlug?: string | null;
   folders?: {
     id: string;
     name: string;
@@ -82,6 +84,7 @@ const VideoCard = ({
             description={description}
             visibility={visibility}
             folderId={folderId}
+            shareSlug={shareSlug}
             folders={folders}
           />
         </div>

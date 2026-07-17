@@ -40,5 +40,15 @@ export const getPublicAppUrl = (request: Request) => {
   return new URL(request.url).origin;
 };
 
-export const watchShareUrl = (request: Request, videoId: string) =>
-  `${getPublicAppUrl(request)}/watch/${videoId}`;
+/** Prefer short `/r/{slug}` when available; else `/watch/{id}`. */
+export const watchShareUrl = (
+  request: Request,
+  videoId: string,
+  shareSlug?: string | null,
+) => {
+  const base = getPublicAppUrl(request);
+  if (shareSlug) {
+    return `${base}/r/${shareSlug}`;
+  }
+  return `${base}/watch/${videoId}`;
+};

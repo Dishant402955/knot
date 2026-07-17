@@ -64,6 +64,9 @@ export const videos = pgTable("videos", {
 
   thumbnailKey: text("thumbnail_key"),
 
+  /** Short public slug for `/r/{shareSlug}` share links. */
+  shareSlug: varchar("share_slug", { length: 16 }).unique(),
+
   status: videoStatusEnum("status").default("RECORDING").notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),

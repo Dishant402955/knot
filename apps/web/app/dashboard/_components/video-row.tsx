@@ -18,6 +18,7 @@ const VideoRow = ({
   createdAt,
   updatedAt,
   thumbnailUrl = null,
+  shareSlug = null,
   folders = [],
 }: {
   id: string;
@@ -29,6 +30,7 @@ const VideoRow = ({
   createdAt: Date | string;
   updatedAt: Date | string;
   thumbnailUrl?: string | null;
+  shareSlug?: string | null;
   folders?: {
     id: string;
     name: string;
@@ -85,6 +87,7 @@ const VideoRow = ({
           description={description}
           visibility={visibility}
           folderId={folderId}
+          shareSlug={shareSlug}
           folders={folders}
         />
       </div>

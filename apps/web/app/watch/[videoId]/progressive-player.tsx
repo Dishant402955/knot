@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { CommentsSection } from "@/app/watch/[videoId]/comments-section";
 import { Button } from "@/components/ui/button";
-import { clientWatchShareUrl } from "@/lib/share";
+import { clientWatchShareUrl, visibilityCopyHint } from "@/lib/share";
 import {
   getWatchPlaybackState,
   type WatchSegment,
@@ -19,22 +19,25 @@ type ProgressivePlayerProps = {
   title: string;
   description: string | null;
   initialStatus: string;
+  visibility: "PRIVATE" | "PUBLIC" | "AUTHENTICATED";
+  shareSlug: string | null;
   initialSegments: WatchSegment[];
   initialComments: WatchComment[];
   canComment: boolean;
   isOwner: boolean;
 };
 
-/** Merge polls without replacing URLs for indices we already have (avoids reload). */
+/**
+ * Merge polls: keep all indices, refresh signed URLs for existing ones
+ * so long live sessions don't keep expired B2 links.
+ */
 const mergeSegments = (
   prev: WatchSegment[],
   next: WatchSegment[],
 ): WatchSegment[] => {
   const byIndex = new Map(prev.map((s) => [s.index, s]));
   for (const segment of next) {
-    if (!byIndex.has(segment.index)) {
-      byIndex.set(segment.index, segment);
-    }
+    byIndex.set(segment.index, segment);
   }
   return [...byIndex.values()].sort((a, b) => a.index - b.index);
 };
@@ -44,6 +47,8 @@ const ProgressivePlayer = ({
   title,
   description,
   initialStatus,
+  visibility,
+  shareSlug,
   initialSegments,
   initialComments,
   canComment,
@@ -154,10 +159,12 @@ const ProgressivePlayer = ({
   }, []);
 
   const copyShareLink = async () => {
-    const url = clientWatchShareUrl(videoId);
+    const url = clientWatchShareUrl(videoId, shareSlug);
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Share link copied");
+      toast.success("Share link copied", {
+        description: visibilityCopyHint(visibility),
+      });
     } catch {
       toast.error("Could not copy link", { description: url });
     }

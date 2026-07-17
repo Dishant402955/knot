@@ -1,5 +1,4 @@
-import { db } from "@/db";
-import { videos } from "@/db/schema";
+import { insertVideoWithSlug } from "@/lib/video-insert";
 import { apiJson, apiOptionsResponse, watchShareUrl } from "@/lib/api";
 import {
   badRequest,
@@ -46,19 +45,16 @@ export async function POST(request: Request) {
       return badRequest("Title is required.");
     }
 
-    const [video] = await db
-      .insert(videos)
-      .values({
-        userId,
-        title,
-        visibility,
-        status: "RECORDING",
-        segmentCount: 0,
-        durationSeconds: 0,
-      })
-      .returning();
+    const video = await insertVideoWithSlug({
+      userId,
+      title,
+      visibility,
+      status: "RECORDING",
+      segmentCount: 0,
+      durationSeconds: 0,
+    });
 
-    const shareUrl = watchShareUrl(request, video.id);
+    const shareUrl = watchShareUrl(request, video.id, video.shareSlug);
 
     return apiJson(
       {
@@ -68,6 +64,7 @@ export async function POST(request: Request) {
           title: video.title,
           status: video.status,
           visibility: video.visibility,
+          shareSlug: video.shareSlug,
           shareUrl,
         },
       },

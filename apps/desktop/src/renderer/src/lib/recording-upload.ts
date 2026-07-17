@@ -114,6 +114,25 @@ export class RecordingUploadSession {
     await this.chain;
   }
 
+  /**
+   * Upload JPEG poster (fire-and-forget friendly). Does not block chunk queue.
+   */
+  async uploadThumbnail(blob: Blob): Promise<boolean> {
+    if (!this.videoId || blob.size === 0) return false;
+
+    try {
+      await this.fetch(`/api/videos/${this.videoId}/thumbnail`, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+        body: blob,
+      });
+      return true;
+    } catch (error) {
+      console.error("[knot] thumbnail upload failed:", error);
+      return false;
+    }
+  }
+
   async finalize(
     status?: "READY" | "FAILED" | "PROCESSING",
   ): Promise<string | null> {

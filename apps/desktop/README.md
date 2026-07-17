@@ -47,7 +47,7 @@ Open any `chunk-*.webm` in a player. There is no single appended `recording.webm
 
 Requires `apps/web` running with B2 env vars. The **API host** must reach Backblaze B2.
 
-Chunks are uploaded with `PUT /api/videos/:id/segments/:index` (bytes go to Next.js; Next writes to B2). Desktop does **not** talk to B2 directly.
+Chunks are uploaded with `PUT /api/videos/:id/segments/:index` (bytes go to Next.js; Next writes to B2). After chunk 0, desktop also uploads a JPEG poster via `PUT /api/videos/:id/thumbnail`. Desktop does **not** talk to B2 directly.
 
 If the API runs on a machine where Cisco Umbrella blocks B2, uploads still fail — point `KNOT_WEB_APP_URL` at a cloud-hosted Knot web app, or allowlist `*.backblazeb2.com` for that host.
 

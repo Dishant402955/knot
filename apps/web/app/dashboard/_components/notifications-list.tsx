@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -51,15 +51,21 @@ const NotificationsList = ({
   const [items, setItems] = useState(initial);
   const [pending, startTransition] = useTransition();
 
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
+
   const unreadCount = items.filter((n) => !n.isRead).length;
 
   const markOne = (id: string) => {
+    const previous = items;
     setItems((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
     );
     startTransition(async () => {
       const res = await markNotificationAsRead(id);
       if (!res.success) {
+        setItems(previous);
         toast.error(res.message);
         router.refresh();
         return;
@@ -69,10 +75,12 @@ const NotificationsList = ({
   };
 
   const markAll = () => {
+    const previous = items;
     setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
     startTransition(async () => {
       const res = await markAllNotificationsAsRead();
       if (!res.success) {
+        setItems(previous);
         toast.error(res.message);
         router.refresh();
         return;

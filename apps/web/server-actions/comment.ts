@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { comments, notifications, videos } from "@/db/schema";
+import { resolveMentionedUserIds } from "@/lib/clerk-users";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -172,6 +173,27 @@ export const createComment = async ({
       await db.insert(notifications).values({
         userId: access.video.userId,
         type: "COMMENT",
+        entityId: videoId,
+        isRead: false,
+      });
+    }
+
+    // @mentions → MENTION notifications (skip owner if they already got COMMENT).
+    const mentionedIds = await resolveMentionedUserIds(trimmed, user.id);
+    for (const mentionedId of mentionedIds) {
+      if (
+        access.video.visibility === "PRIVATE" &&
+        mentionedId !== access.video.userId
+      ) {
+        continue;
+      }
+      if (mentionedId === access.video.userId && access.video.userId !== user.id) {
+        continue;
+      }
+
+      await db.insert(notifications).values({
+        userId: mentionedId,
+        type: "MENTION",
         entityId: videoId,
         isRead: false,
       });

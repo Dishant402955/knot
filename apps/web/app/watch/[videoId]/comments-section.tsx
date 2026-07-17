@@ -13,6 +13,7 @@ import {
   deleteComment,
   type WatchComment,
 } from "@/server-actions/comment";
+import { splitMentionSegments } from "@/lib/mentions";
 
 import { MessageSquare, Trash2 } from "lucide-react";
 
@@ -21,6 +22,20 @@ const formatTimestamp = (seconds: number) => {
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
+
+const CommentBody = ({ text }: { text: string }) => (
+  <p className="text-sm whitespace-pre-wrap">
+    {splitMentionSegments(text).map((part, i) =>
+      part.type === "mention" ? (
+        <span key={`${i}-${part.value}`} className="font-medium text-primary">
+          {part.value}
+        </span>
+      ) : (
+        <span key={`${i}-${part.value.slice(0, 12)}`}>{part.value}</span>
+      ),
+    )}
+  </p>
+);
 
 const CommentsSection = ({
   videoId,
@@ -99,7 +114,7 @@ const CommentsSection = ({
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Leave a comment…"
+            placeholder="Leave a comment… Use @username to mention someone"
             rows={3}
             maxLength={2000}
             disabled={pending}
@@ -128,7 +143,10 @@ const CommentsSection = ({
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          <Link href="/sign-in" className="underline underline-offset-2">
+          <Link
+            href={`/sign-in?redirect_url=${encodeURIComponent(`/watch/${videoId}`)}`}
+            className="underline underline-offset-2"
+          >
             Sign in
           </Link>{" "}
           to leave a comment.
@@ -167,7 +185,7 @@ const CommentsSection = ({
                       </>
                     ) : null}
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">{comment.text}</p>
+                  <CommentBody text={comment.text} />
                 </div>
 
                 {comment.isOwn || isOwner ? (

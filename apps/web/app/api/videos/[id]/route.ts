@@ -10,7 +10,7 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/api-auth";
-import { createNotification } from "@/server-actions/notification";
+import { createNotification } from "@/lib/notifications";
 
 export const OPTIONS = () => apiOptionsResponse();
 
@@ -115,9 +115,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         description: video.description,
         status: video.status,
         visibility: video.visibility,
+        shareSlug: video.shareSlug,
         segmentCount: video.segmentCount,
         durationSeconds: video.durationSeconds,
-        shareUrl: watchShareUrl(request, video.id),
+        shareUrl: watchShareUrl(request, video.id, video.shareSlug),
       },
     });
   } catch {

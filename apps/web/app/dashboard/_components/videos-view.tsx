@@ -18,6 +18,7 @@ type ViewVideo = {
   createdAt: Date | string;
   updatedAt: Date | string;
   thumbnailUrl?: string | null;
+  shareSlug?: string | null;
 };
 
 const STORAGE_KEY = "knot:videos-view";
@@ -81,6 +82,7 @@ const VideosView = ({
                 visibility={video.visibility}
                 folderId={video.folderId}
                 thumbnailUrl={video.thumbnailUrl}
+                shareSlug={video.shareSlug}
                 folders={folders}
               />
             ))}
@@ -99,6 +101,7 @@ const VideosView = ({
                 createdAt={video.createdAt}
                 updatedAt={video.updatedAt}
                 thumbnailUrl={video.thumbnailUrl}
+                shareSlug={video.shareSlug}
                 folders={folders}
               />
             ))}

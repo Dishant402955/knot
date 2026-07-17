@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { clientWatchShareUrl } from "@/lib/share";
+import { clientWatchShareUrl, visibilityCopyHint } from "@/lib/share";
 
 import { Copy, ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react";
 
@@ -32,6 +32,7 @@ const VideoActions = ({
   description,
   visibility,
   folderId,
+  shareSlug = null,
   folders,
 }: {
   id: string;
@@ -39,6 +40,7 @@ const VideoActions = ({
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC" | "AUTHENTICATED";
   folderId: string | null;
+  shareSlug?: string | null;
   folders: {
     id: string;
     name: string;
@@ -50,11 +52,13 @@ const VideoActions = ({
   const [copying, setCopying] = useState(false);
 
   const copyShareLink = async () => {
-    const url = clientWatchShareUrl(id);
+    const url = clientWatchShareUrl(id, shareSlug);
     setCopying(true);
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Share link copied");
+      toast.success("Share link copied", {
+        description: visibilityCopyHint(visibility),
+      });
     } catch {
       toast.error("Could not copy link", { description: url });
     } finally {

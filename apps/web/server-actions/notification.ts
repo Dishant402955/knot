@@ -2,38 +2,12 @@
 
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
+import { createNotification } from "@/lib/notifications";
 import { currentUser } from "@clerk/nextjs/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-type NotificationType =
-  | "COMMENT"
-  | "VIDEO_SHARED"
-  | "RECORDING_READY"
-  | "MENTION";
-
-/** Internal helper — create a notification for a user. */
-export const createNotification = async ({
-  userId,
-  type,
-  entityId,
-}: {
-  userId: string;
-  type: NotificationType;
-  entityId?: string | null;
-}) => {
-  const [row] = await db
-    .insert(notifications)
-    .values({
-      userId,
-      type,
-      entityId: entityId ?? null,
-      isRead: false,
-    })
-    .returning();
-
-  return row;
-};
+export { createNotification };
 
 export const getAllUserNotifications = async () => {
   const user = await currentUser();

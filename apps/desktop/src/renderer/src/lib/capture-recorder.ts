@@ -506,6 +506,19 @@ export class CaptureRecorder {
     this.cleanup();
   }
 
+  /** JPEG snapshot of the live composed canvas (for cloud thumbnail). */
+  async captureCanvasJpeg(quality = 0.85): Promise<Blob | null> {
+    if (!this.canvas) return null;
+
+    return new Promise((resolve) => {
+      this.canvas!.toBlob(
+        (blob) => resolve(blob),
+        "image/jpeg",
+        quality,
+      );
+    });
+  }
+
   async takeScreenshotFrame(options: {
     sourceId: string;
     mode: CaptureMode;

@@ -34,6 +34,7 @@ type ViewVideo = {
   createdAt: Date | string;
   updatedAt: Date | string;
   thumbnailUrl?: string | null;
+  shareSlug?: string | null;
 };
 
 const STORAGE_KEY = "knot:folder-view";
@@ -157,6 +158,7 @@ const DashboardSections = ({
                   visibility={video.visibility}
                   folderId={video.folderId}
                   thumbnailUrl={video.thumbnailUrl}
+                  shareSlug={video.shareSlug}
                   folders={allFolders}
                 />
               ))}
@@ -175,6 +177,7 @@ const DashboardSections = ({
                   createdAt={video.createdAt}
                   updatedAt={video.updatedAt}
                   thumbnailUrl={video.thumbnailUrl}
+                  shareSlug={video.shareSlug}
                   folders={allFolders}
                 />
               ))}

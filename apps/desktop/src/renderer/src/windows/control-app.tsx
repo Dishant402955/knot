@@ -396,6 +396,12 @@ export function ControlApp() {
                     ? `Live · chunk 1 uploaded · ${(saved.size / 1024).toFixed(0)} KB`
                     : `Chunk ${index + 1} uploaded · ${(saved.size / 1024).toFixed(0)} KB`,
                 );
+
+                if (index === 0) {
+                  const thumb =
+                    await recorderRef.current.captureCanvasJpeg(0.82);
+                  if (thumb) await upload.uploadThumbnail(thumb);
+                }
               } catch (uploadError) {
                 setMessage(
                   `Chunk ${index + 1} saved locally · cloud: ${formatUploadError(uploadError)}`,
