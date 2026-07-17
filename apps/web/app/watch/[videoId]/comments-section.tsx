@@ -6,8 +6,8 @@ import { useState, useTransition } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
+import { MentionTextarea } from "@/app/watch/[videoId]/mention-textarea";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   createComment,
   deleteComment,
@@ -42,12 +42,16 @@ const CommentsSection = ({
   initialComments,
   canComment,
   isOwner,
+  visibility,
+  ownerUserId,
   getPlaybackSeconds,
 }: {
   videoId: string;
   initialComments: WatchComment[];
   canComment: boolean;
   isOwner: boolean;
+  visibility: "PRIVATE" | "PUBLIC" | "AUTHENTICATED";
+  ownerUserId: string;
   getPlaybackSeconds: () => number | null;
 }) => {
   const router = useRouter();
@@ -111,10 +115,12 @@ const CommentsSection = ({
 
       {canComment ? (
         <div className="space-y-3">
-          <Textarea
+          <MentionTextarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Leave a comment… Use @username to mention someone"
+            onChange={setText}
+            visibility={visibility}
+            ownerUserId={ownerUserId}
+            placeholder="Leave a comment… Type @ to mention someone"
             rows={3}
             maxLength={2000}
             disabled={pending}

@@ -10,7 +10,7 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/api-auth";
-import { createNotification } from "@/lib/notifications";
+import { createNotification, notifyIfVideoBecamePublic } from "@/lib/notifications";
 
 export const OPTIONS = () => apiOptionsResponse();
 
@@ -105,6 +105,17 @@ export async function PATCH(request: Request, context: RouteContext) {
       } catch {
         // Status update succeeded; notification is best-effort.
       }
+    }
+
+    try {
+      await notifyIfVideoBecamePublic(
+        userId,
+        video.id,
+        existing.visibility,
+        video.visibility,
+      );
+    } catch {
+      // Visibility update succeeded; notification is best-effort.
     }
 
     return apiJson({

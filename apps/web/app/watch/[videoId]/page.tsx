@@ -77,6 +77,7 @@ const WatchPage = async ({
           initialStatus={result.video.status}
           visibility={result.video.visibility}
           shareSlug={result.video.shareSlug}
+          ownerUserId={result.video.ownerUserId}
           initialSegments={result.segments}
           initialComments={comments}
           canComment={canComment}

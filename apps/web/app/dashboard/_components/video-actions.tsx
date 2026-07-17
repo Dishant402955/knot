@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { VideoShareActions } from "@/app/watch/[videoId]/video-share-actions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { clientWatchShareUrl, visibilityCopyHint } from "@/lib/share";
 
-import { Copy, ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Code2, Copy, ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react";
 
 const EditVideo = dynamic(
   () => import("./edit-video").then((mod) => ({ default: mod.EditVideo })),
@@ -49,6 +50,7 @@ const VideoActions = ({
 }) => {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
   const [copying, setCopying] = useState(false);
 
   const copyShareLink = async () => {
@@ -103,6 +105,21 @@ const VideoActions = ({
             className="cursor-pointer"
             onSelect={(e) => {
               e.preventDefault();
+              if (visibility !== "PUBLIC") {
+                toast.error("Embed requires Public visibility");
+                return;
+              }
+              setEmbedOpen(true);
+            }}
+          >
+            <Code2 />
+            Copy embed code
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={(e) => {
+              e.preventDefault();
               setEditOpen(true);
             }}
           >
@@ -123,6 +140,15 @@ const VideoActions = ({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <VideoShareActions
+        videoId={id}
+        shareSlug={shareSlug}
+        visibility={visibility}
+        layout="none"
+        openEmbed={embedOpen}
+        onOpenEmbedChange={setEmbedOpen}
+      />
 
       {editOpen ? (
         <EditVideo

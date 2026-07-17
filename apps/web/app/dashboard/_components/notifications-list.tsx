@@ -24,7 +24,7 @@ type NotificationItem = {
 
 const notificationLabels: Record<string, string> = {
   COMMENT: "New comment on your video",
-  VIDEO_SHARED: "Your video was shared",
+  VIDEO_SHARED: "Your video is now public",
   RECORDING_READY: "Recording is ready",
   MENTION: "You were mentioned",
 };

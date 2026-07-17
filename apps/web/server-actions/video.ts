@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { folders, videoSegments, videos } from "@/db/schema";
 import { getSignedDownloadUrl, isB2Configured } from "@/lib/b2";
+import { notifyIfVideoBecamePublic } from "@/lib/notifications";
 import { withThumbnailUrls } from "@/lib/thumbnails";
 import { insertVideoWithSlug } from "@/lib/video-insert";
 import { auth, currentUser } from "@clerk/nextjs/server";
@@ -258,6 +259,17 @@ export const updateVideo = async ({
       .where(and(eq(videos.id, id), eq(videos.userId, user.id)))
       .returning();
 
+    try {
+      await notifyIfVideoBecamePublic(
+        user.id,
+        video.id,
+        existing.visibility,
+        video.visibility,
+      );
+    } catch {
+      // Visibility update succeeded; notification is best-effort.
+    }
+
     revalidateVideoPaths(existing.folderId);
     revalidateVideoPaths(nextFolderId);
     revalidatePath(`/watch/${id}`);
@@ -413,6 +425,7 @@ export const getVideoForWatch = async (videoId: string) => {
         status: video.status,
         visibility: video.visibility,
         shareSlug: video.shareSlug,
+        ownerUserId: video.userId,
         durationSeconds: video.durationSeconds,
         segmentCount: video.segmentCount,
         isOwner,

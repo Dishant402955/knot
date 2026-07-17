@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/watch(.*)",
   "/r(.*)",
+  "/embed(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

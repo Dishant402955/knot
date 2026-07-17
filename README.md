@@ -22,15 +22,19 @@ Knot is an open-source, Loom-style async video platform. Record your screen from
 ### Share & Watch
 
 - **Share links** — copy a single link and send it to anyone
+- **Short links** — `/r/[slug]` redirects after access checks
+- **Embed codes** — iframe snippet for PUBLIC videos
 - **Public links** — no login required for open sharing
 - **Authenticated links** — restrict viewing to signed-in users
 - **Private videos** — owner-only access
+- **Comments & @mentions** — timestamped feedback with autocomplete
+- **Notifications** — comments, mentions, recording ready, video shared
 
 ### Planned
 
-- Embed codes for external sites
-- Mention autocomplete in the comment composer
-- `VIDEO_SHARED` notification events
+- View counts / analytics
+- Optional allowlisted embed domains (`frame-ancestors`)
+- Desktop recording visibility picker (today defaults to Public)
 
 ## Tech Stack
 

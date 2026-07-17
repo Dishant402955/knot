@@ -288,8 +288,11 @@ Ordered chunks uploaded during recording. Progressive playback reads them as the
 `id`, `videoId` (FK, cascade delete), `index` (0-based order), `storageKey`, `durationSeconds`, `size`, `createdAt`. **Unique:** `(videoId, index)`.
 
 ### `comments` / `notifications`
-- `comments`: timestamped feedback (`timestampSeconds` anchors a point in the video). Watch page UI + `server-actions/comment.ts` (create/delete; owner notified via `COMMENT`). `@username` mentions resolve via Clerk and create `MENTION` notifications (skipped for users who cannot access `PRIVATE` videos).
-- `notifications`: feed with types `COMMENT`, `VIDEO_SHARED`, `RECORDING_READY`, `MENTION`. Mark-as-read + sidebar unread count; `RECORDING_READY` created when desktop marks a video `READY`.
+- `comments`: timestamped feedback (`timestampSeconds` anchors a point in the video). Watch page UI + `server-actions/comment.ts` (create/delete; owner notified via `COMMENT`). `@username` mentions resolve via Clerk (autocomplete typeahead + `MENTION` notifications); private videos only allow mentioning the owner.
+- `notifications`: feed with types `COMMENT`, `VIDEO_SHARED` (visibility → Public), `RECORDING_READY`, `MENTION`. Mark-as-read + sidebar unread count.
+
+### Embed
+Public videos can be embedded via `/embed/[videoId]` (minimal player, CSP `frame-ancestors *`). Watch/dashboard expose an iframe snippet. Non-PUBLIC videos 404 on the embed route.
 
 ### Migrations
 Drizzle Kit is configured in `apps/web/drizzle.config.ts` (output `./drizzle`). Baseline migration `0000_*.sql` is **idempotent** (`IF NOT EXISTS` / duplicate-object guards) so applying it against an existing Neon DB does not drop or alter data.

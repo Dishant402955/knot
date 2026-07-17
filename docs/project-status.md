@@ -6,45 +6,27 @@ Where [Knot](../README.md) stands today (July 2026) vs. the [target architecture
 
 | Area | Status |
 |------|--------|
-| Monorepo + web scaffold | Done |
-| Marketing / landing site | Done |
-| Auth (Clerk) — web + desktop | Done |
-| Dashboard (folders / videos / nav) | Done |
-| Visibility PRIVATE / PUBLIC / AUTHENTICATED | Done |
-| B2 storage + progressive watch | Done |
-| Share links (UUID + `/r/{slug}`) | Done |
-| Thumbnails | Done |
-| Comments + @mentions | Done |
-| Notifications (read + events) | Done |
-| Desktop recorder + live upload | Done |
-| Database migrations | Done |
-| Production B2 / env checklist | Done (`docs/b2-production.md`, `assert:production`) |
-| Desktop packaging + icon | Done |
-| Code signing / notarization wiring | Done (env-driven) |
-| Auto-update (GitHub Releases) | Done (`electron-updater`) |
+| Monorepo + web + desktop product | Done |
+| Visibility / share / short links / embed | Done |
+| Thumbnails + comments + @mentions (incl. autocomplete) | Done |
+| Notifications (COMMENT / MENTION / RECORDING_READY / VIDEO_SHARED) | Done |
+| Desktop packaging, icon, signing hooks, auto-update | Done |
+| Production B2 / env checklists | Done |
 
----
+## Remaining
 
-## Remaining (optional product polish)
+**Nothing required for the core product loop.** Optional future ideas only:
 
-| Task | Notes |
+| Idea | Notes |
 |------|-------|
-| **Embed codes** | Watch-page / share embed snippet for external sites |
-| **`VIDEO_SHARED` notifications** | Enum exists; not emitted on visibility changes yet |
-| **Mention autocomplete** | Plain `@username` works; typeahead UI would be nicer |
+| Restrict embed `frame-ancestors` | Today embeds allow any parent (`frame-ancestors *`); lock to allowlisted domains later if needed |
+| View counts / analytics | Mentioned as future in architecture |
+| Desktop visibility picker | Recordings default PUBLIC; UI to choose PRIVATE/AUTHENTICATED on record |
 
-Operational notes (not product gaps): deploy web with production B2 + https `NEXT_PUBLIC_APP_URL`, bake the same origin into `apps/desktop/.env.production` before `package:*` / `release:*`, and set signing / Apple / `GH_TOKEN` secrets when publishing public builds.
+Operational (deploy, not code): host web with production B2 + https URL, bake `KNOT_WEB_APP_URL` into desktop `.env.production`, set signing / Apple / `GH_TOKEN` when publishing.
 
----
+## Recent polish
 
-## Key references
-
-| Path | Role |
-|------|------|
-| [docs/b2-production.md](./b2-production.md) | Bucket, CORS, env, smoke checks |
-| `apps/web/scripts/assert-production-env.ts` | `pnpm --filter web assert:production` |
-| `apps/desktop/example.env.production` | Bake `KNOT_WEB_APP_URL` for installers |
-| `apps/desktop/packaging/icon.png` | App / installer icon |
-| `apps/desktop/packaging/notarize.cjs` | macOS notarization hook |
-| `apps/desktop/src/main/updater.ts` | Auto-update |
-| `apps/desktop/README.md` | Packaging + release commands |
+- **Embed** — `/embed/[videoId]` (PUBLIC only) + Copy embed on watch/dashboard
+- **VIDEO_SHARED** — fires when visibility becomes Public; label “Your video is now public”
+- **Mention autocomplete** — type `@` in comments (Clerk search; private videos → owner only)
