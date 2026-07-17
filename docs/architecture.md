@@ -132,11 +132,11 @@ The single backend for browser and desktop.
 | Home | `/dashboard` — recent folders and videos with shared grid/list toggle |
 | Folders | `/dashboard/folders` (root list), `/dashboard/folder/:id` (detail); grid or list view; nested CRUD with breadcrumbs |
 | Settings | `/dashboard/settings` — Clerk `UserProfile` (account, security) |
-| Notifications | `/dashboard/notifications` — read-only list + empty state |
+| Notifications | `/dashboard/notifications` — mark read, link to watch, unread badge in sidebar |
 | Videos | `/dashboard/videos` — grid/list + create/edit/delete + watch links |
 | Nav feel | Soft navigations use `loading.tsx` + client router `staleTimes`; dialogs code-split on open |
 
-For remaining web work (share links, comments, etc.), see [Project Status](./project-status.md#remaining--web-app).
+For remaining web work (thumbnails generation, production B2, short links), see [Project Status](./project-status.md#remaining--web-app).
 
 Folder mutations enforce same-level unique names, block circular parent moves, and recursively delete subfolders. Videos in a deleted folder get `folderId` set to null (DB `onDelete: set null`).
 
@@ -284,9 +284,9 @@ Ordered chunks uploaded during recording. Progressive playback reads them as the
 
 `id`, `videoId` (FK, cascade delete), `index` (0-based order), `storageKey`, `durationSeconds`, `size`, `createdAt`. **Unique:** `(videoId, index)`.
 
-### `comments` / `notifications` (planned)
-- `comments`: timestamped feedback (`timestampSeconds` anchors a point in the video).
-- `notifications`: feed with types `COMMENT`, `VIDEO_SHARED`, `RECORDING_READY`, `MENTION`.
+### `comments` / `notifications`
+- `comments`: timestamped feedback (`timestampSeconds` anchors a point in the video). Watch page UI + `server-actions/comment.ts` (create/delete; owner notified via `COMMENT`).
+- `notifications`: feed with types `COMMENT`, `VIDEO_SHARED`, `RECORDING_READY`, `MENTION`. Mark-as-read + sidebar unread count; `RECORDING_READY` created when desktop marks a video `READY`.
 
 ### Migrations
 Drizzle Kit is configured in `apps/web/drizzle.config.ts` (output `./drizzle`). Baseline migration `0000_*.sql` is **idempotent** (`IF NOT EXISTS` / duplicate-object guards) so applying it against an existing Neon DB does not drop or alter data.

@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { ProgressivePlayer } from "@/app/watch/[videoId]/progressive-player";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
+import { getCommentsForVideo } from "@/server-actions/comment";
 import { getVideoForWatch } from "@/server-actions/video";
 
 import { ArrowLeft } from "lucide-react";
@@ -40,6 +42,16 @@ const WatchPage = async ({
     );
   }
 
+  const commentsResult = await getCommentsForVideo(videoId);
+  const comments =
+    commentsResult.success && "comments" in commentsResult
+      ? commentsResult.comments
+      : [];
+  const canComment =
+    commentsResult.success && "canComment" in commentsResult
+      ? commentsResult.canComment
+      : false;
+
   return (
     <div className="min-h-screen">
       <div className="border-b">
@@ -64,8 +76,13 @@ const WatchPage = async ({
           description={result.video.description}
           initialStatus={result.video.status}
           initialSegments={result.segments}
+          initialComments={comments}
+          canComment={canComment}
+          isOwner={result.video.isOwner}
         />
       </div>
+
+      <Toaster />
     </div>
   );
 };

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { Video } from "lucide-react";
 
 import { VideoCard } from "./video-card";
 import { VideoRow } from "./video-row";
@@ -15,6 +17,7 @@ type ViewVideo = {
   folderId: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+  thumbnailUrl?: string | null;
 };
 
 const STORAGE_KEY = "knot:videos-view";
@@ -23,6 +26,8 @@ const VideosView = ({
   videos,
   folders,
   emptyText = "No videos yet.",
+  emptyHint,
+  emptyAction,
   title,
 }: {
   videos: ViewVideo[];
@@ -32,6 +37,8 @@ const VideosView = ({
     parentId?: string | null;
   }[];
   emptyText?: string;
+  emptyHint?: string;
+  emptyAction?: ReactNode;
   title?: string;
 }) => {
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -73,6 +80,7 @@ const VideosView = ({
                 status={video.status}
                 visibility={video.visibility}
                 folderId={video.folderId}
+                thumbnailUrl={video.thumbnailUrl}
                 folders={folders}
               />
             ))}
@@ -90,13 +98,25 @@ const VideosView = ({
                 folderId={video.folderId}
                 createdAt={video.createdAt}
                 updatedAt={video.updatedAt}
+                thumbnailUrl={video.thumbnailUrl}
                 folders={folders}
               />
             ))}
           </div>
         )
       ) : (
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Video className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{emptyText}</p>
+            {emptyHint ? (
+              <p className="text-sm text-muted-foreground">{emptyHint}</p>
+            ) : null}
+          </div>
+          {emptyAction ? <div className="pt-1">{emptyAction}</div> : null}
+        </div>
       )}
     </div>
   );

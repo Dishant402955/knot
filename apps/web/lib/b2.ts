@@ -119,5 +119,8 @@ export const segmentStorageKey = (
   index: number,
 ) => `${userId}/${videoId}/segments/${index}.webm`;
 
+export const thumbnailStorageKey = (userId: string, videoId: string) =>
+  `${userId}/${videoId}/thumbnail.jpg`;
+
 export const MAX_SEGMENT_INDEX = 10_000;
 export const MAX_SEGMENT_BYTES = 64 * 1024 * 1024;

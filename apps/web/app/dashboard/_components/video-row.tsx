@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { Video } from "lucide-react";
 
 import { VideoActions } from "./video-actions";
+import { VideoStatusBadge, VideoVisibilityBadge } from "./video-badges";
 
 const VideoRow = ({
   id,
@@ -16,6 +17,7 @@ const VideoRow = ({
   folderId,
   createdAt,
   updatedAt,
+  thumbnailUrl = null,
   folders = [],
 }: {
   id: string;
@@ -26,6 +28,7 @@ const VideoRow = ({
   folderId: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+  thumbnailUrl?: string | null;
   folders?: {
     id: string;
     name: string;
@@ -38,7 +41,20 @@ const VideoRow = ({
         href={`/watch/${id}`}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
-        <Video className="h-5 w-5 shrink-0" />
+        <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-muted">
+          {thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed B2 URLs are ephemeral
+            <img
+              src={thumbnailUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <Video className="h-4 w-4" />
+            </div>
+          )}
+        </div>
 
         <div className="min-w-0">
           <p className="truncate font-medium">{title}</p>
@@ -55,13 +71,10 @@ const VideoRow = ({
         </div>
       </Link>
 
-      <div className="hidden shrink-0 items-center gap-6 text-sm text-muted-foreground lg:flex">
-        <span className="capitalize">{status.toLowerCase()}</span>
-
-        <span className="capitalize">{visibility.toLowerCase()}</span>
-
+      <div className="hidden shrink-0 items-center gap-4 text-sm text-muted-foreground lg:flex">
+        <VideoStatusBadge status={status} />
+        <VideoVisibilityBadge visibility={visibility} />
         <span>Created {format(new Date(createdAt), "PP")}</span>
-
         <span>Updated {format(new Date(updatedAt), "PP")}</span>
       </div>
 

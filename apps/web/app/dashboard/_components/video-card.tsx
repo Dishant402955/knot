@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Video } from "lucide-react";
 
 import { VideoActions } from "./video-actions";
+import { VideoStatusBadge, VideoVisibilityBadge } from "./video-badges";
 
 const VideoCard = ({
   id,
@@ -21,6 +22,7 @@ const VideoCard = ({
   status,
   visibility,
   folderId,
+  thumbnailUrl = null,
   folders = [],
 }: {
   id: string;
@@ -29,6 +31,7 @@ const VideoCard = ({
   status: string;
   visibility: "PRIVATE" | "PUBLIC" | "AUTHENTICATED";
   folderId: string | null;
+  thumbnailUrl?: string | null;
   folders?: {
     id: string;
     name: string;
@@ -36,19 +39,37 @@ const VideoCard = ({
   }[];
 }) => {
   return (
-    <Card className="w-80 transition hover:shadow-md">
-      <CardHeader>
-        <div className="flex w-full items-start justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Video className="h-5 w-5 shrink-0" />
-
-              <CardTitle>
-                <Link href={`/watch/${id}`} className="hover:underline">
-                  {title}
-                </Link>
-              </CardTitle>
+    <Card className="w-80 overflow-hidden transition hover:shadow-md">
+      <Link href={`/watch/${id}`} className="block">
+        <div className="relative aspect-video w-full bg-muted">
+          {thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed B2 URLs are ephemeral
+            <img
+              src={thumbnailUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Video className="h-8 w-8 opacity-60" />
+              <span className="text-xs">No thumbnail</span>
             </div>
+          )}
+
+          <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+            <VideoStatusBadge status={status} />
+          </div>
+        </div>
+      </Link>
+
+      <CardHeader className="pt-4">
+        <div className="flex w-full items-start justify-between gap-2">
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="line-clamp-1 text-base">
+              <Link href={`/watch/${id}`} className="hover:underline">
+                {title}
+              </Link>
+            </CardTitle>
 
             <CardDescription className="line-clamp-2">
               {description || "No description"}
@@ -66,19 +87,11 @@ const VideoCard = ({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span>Status</span>
-          <span className="capitalize">{status.toLowerCase()}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Visibility</span>
-          <span className="capitalize">{visibility.toLowerCase()}</span>
-        </div>
+      <CardContent className="flex flex-wrap gap-2 pb-2">
+        <VideoVisibilityBadge visibility={visibility} />
       </CardContent>
 
-      <CardFooter className="justify-end">
+      <CardFooter className="justify-end pt-0">
         <Button asChild variant="link" className="cursor-pointer px-0">
           <Link href={`/watch/${id}`}>Watch →</Link>
         </Button>

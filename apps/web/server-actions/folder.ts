@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { folders, videos } from "@/db/schema";
+import { withThumbnailUrls } from "@/lib/thumbnails";
 import { currentUser } from "@clerk/nextjs/server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -194,6 +195,8 @@ export const getFolderById = async (id: string) => {
       .from(videos)
       .where(and(eq(videos.userId, user.id), eq(videos.folderId, id)));
 
+    const videosWithThumbs = await withThumbnailUrls(folderVideos);
+
     const breadcrumbs = [
       { id: null, name: "Folders", href: "/dashboard/folders" },
       ...getBreadcrumbs(id, data).map((crumb, index, items) => ({
@@ -208,7 +211,7 @@ export const getFolderById = async (id: string) => {
       status: 200,
       folder: currentFolder,
       childFolders,
-      videos: folderVideos,
+      videos: videosWithThumbs,
       breadcrumbs,
       folders: mappedFolders,
       message: "Retrieved folder.",

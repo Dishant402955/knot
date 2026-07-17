@@ -1,8 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-import { getWatchPlaybackState, type WatchSegment } from "@/server-actions/video";
+import { CommentsSection } from "@/app/watch/[videoId]/comments-section";
+import { Button } from "@/components/ui/button";
+import { clientWatchShareUrl } from "@/lib/share";
+import {
+  getWatchPlaybackState,
+  type WatchSegment,
+} from "@/server-actions/video";
+import type { WatchComment } from "@/server-actions/comment";
+
+import { Copy } from "lucide-react";
 
 type ProgressivePlayerProps = {
   videoId: string;
@@ -10,6 +20,9 @@ type ProgressivePlayerProps = {
   description: string | null;
   initialStatus: string;
   initialSegments: WatchSegment[];
+  initialComments: WatchComment[];
+  canComment: boolean;
+  isOwner: boolean;
 };
 
 /** Merge polls without replacing URLs for indices we already have (avoids reload). */
@@ -32,6 +45,9 @@ const ProgressivePlayer = ({
   description,
   initialStatus,
   initialSegments,
+  initialComments,
+  canComment,
+  isOwner,
 }: ProgressivePlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const segmentsRef = useRef(initialSegments);
@@ -97,7 +113,6 @@ const ProgressivePlayer = ({
     const el = videoRef.current;
     if (!el || !current) return;
 
-    // Only (re)load when the segment index changes — not when a poll refreshes URLs.
     if (loadedIndexRef.current === current.index) return;
     loadedIndexRef.current = current.index;
 
@@ -126,26 +141,65 @@ const ProgressivePlayer = ({
     wantPlayRef.current = false;
   }, []);
 
+  const getPlaybackSeconds = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || !Number.isFinite(el.currentTime)) return null;
+
+    let offset = 0;
+    for (let i = 0; i < indexRef.current; i += 1) {
+      offset += segmentsRef.current[i]?.durationSeconds ?? 0;
+    }
+
+    return Math.floor(offset + el.currentTime);
+  }, []);
+
+  const copyShareLink = async () => {
+    const url = clientWatchShareUrl(videoId);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied");
+    } catch {
+      toast.error("Could not copy link", { description: url });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="font-bold text-3xl">{title}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <h1 className="font-bold text-3xl">{title}</h1>
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span className="capitalize">{status.toLowerCase()}</span>
-            {isLive && <span>Still recording…</span>}
-            {segments.length > 0 && (
-              <span>
-                Segment {index + 1} of {segments.length}
-              </span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="capitalize">{status.toLowerCase()}</span>
+                {isLive && <span>Still recording…</span>}
+                {segments.length > 0 && (
+                  <span>
+                    Segment {index + 1} of {segments.length}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {description && (
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                {description}
+              </p>
             )}
           </div>
-        </div>
 
-        {description && (
-          <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
-        )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer shrink-0"
+            onClick={() => void copyShareLink()}
+          >
+            <Copy className="mr-1.5 h-4 w-4" />
+            Copy link
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-black">
@@ -191,6 +245,14 @@ const ProgressivePlayer = ({
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <CommentsSection
+        videoId={videoId}
+        initialComments={initialComments}
+        canComment={canComment}
+        isOwner={isOwner}
+        getPlaybackSeconds={getPlaybackSeconds}
+      />
     </div>
   );
 };

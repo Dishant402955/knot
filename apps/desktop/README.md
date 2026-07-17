@@ -102,7 +102,7 @@ cp apps/desktop/example.env apps/desktop/.env   # optional if web .env already h
 pnpm --filter desktop dev
 ```
 
-Run the **web app** on port 3000 when testing API calls (`pnpm --filter web dev`).
+Run the **web app** on port 3000 when exercising API calls (`pnpm --filter web dev`).
 
 ### Unpackaged production smoke test
 

@@ -28,7 +28,9 @@ const VideosPage = async () => {
       <VideosView
         videos={videosResponse.videos}
         folders={foldersResponse.folders}
-        emptyText="No videos yet."
+        emptyText="No videos yet"
+        emptyHint="Record with the Knot desktop app, or create a metadata entry to organize later."
+        emptyAction={<CreateVideo folders={foldersResponse.folders} />}
       />
     </div>
   );

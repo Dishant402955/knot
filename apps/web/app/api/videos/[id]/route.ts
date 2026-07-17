@@ -10,6 +10,7 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/api-auth";
+import { createNotification } from "@/server-actions/notification";
 
 export const OPTIONS = () => apiOptionsResponse();
 
@@ -76,6 +77,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       return badRequest("Title is required.");
     }
 
+    const becameReady =
+      body.status === "READY" && existing.status !== "READY";
+
     const [video] = await db
       .update(videos)
       .set({
@@ -90,6 +94,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       })
       .where(and(eq(videos.id, id), eq(videos.userId, userId)))
       .returning();
+
+    if (becameReady) {
+      try {
+        await createNotification({
+          userId,
+          type: "RECORDING_READY",
+          entityId: video.id,
+        });
+      } catch {
+        // Status update succeeded; notification is best-effort.
+      }
+    }
 
     return apiJson({
       success: true,

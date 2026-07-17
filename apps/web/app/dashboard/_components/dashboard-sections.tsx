@@ -11,6 +11,8 @@ import { VideoCard } from "./video-card";
 import { VideoRow } from "./video-row";
 import { ViewToggle } from "./view-toggle";
 
+import { Folder, Video } from "lucide-react";
+
 type ViewFolder = {
   id: string;
   name: string;
@@ -31,6 +33,7 @@ type ViewVideo = {
   folderId: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+  thumbnailUrl?: string | null;
 };
 
 const STORAGE_KEY = "knot:folder-view";
@@ -115,7 +118,20 @@ const DashboardSections = ({
             </div>
           )
         ) : (
-          <p className="text-sm text-muted-foreground">No folders yet.</p>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Folder className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">No folders yet</p>
+              <p className="text-sm text-muted-foreground">
+                Organize recordings into nested folders.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="cursor-pointer">
+              <Link href="/dashboard/folders">Go to folders</Link>
+            </Button>
+          </div>
         )}
       </section>
 
@@ -140,6 +156,7 @@ const DashboardSections = ({
                   status={video.status}
                   visibility={video.visibility}
                   folderId={video.folderId}
+                  thumbnailUrl={video.thumbnailUrl}
                   folders={allFolders}
                 />
               ))}
@@ -157,13 +174,27 @@ const DashboardSections = ({
                   folderId={video.folderId}
                   createdAt={video.createdAt}
                   updatedAt={video.updatedAt}
+                  thumbnailUrl={video.thumbnailUrl}
                   folders={allFolders}
                 />
               ))}
             </div>
           )
         ) : (
-          <p className="text-sm text-muted-foreground">No videos yet.</p>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Video className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">No videos yet</p>
+              <p className="text-sm text-muted-foreground">
+                Record from the desktop app or create a video entry here.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="cursor-pointer">
+              <Link href="/dashboard/videos">Go to videos</Link>
+            </Button>
+          </div>
         )}
       </section>
     </div>

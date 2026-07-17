@@ -10,6 +10,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -73,7 +74,10 @@ const isNavActive = (url: string, pathname: string) => {
   return pathname === url || pathname.startsWith(`${url}/`);
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  unreadCount = 0,
+  ...props
+}: React.ComponentProps<typeof Sidebar> & { unreadCount?: number }) {
   const pathname = usePathname();
 
   return (
@@ -104,6 +108,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {navMain.map((item) => {
               const active = isNavActive(item.url, pathname);
               const Icon = item.icon;
+              const showUnread =
+                item.url === "/dashboard/notifications" && unreadCount > 0;
 
               return (
                 <SidebarMenuItem key={item.title} className="my-0.5">
@@ -119,6 +125,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
+
+                  {showUnread ? (
+                    <SidebarMenuBadge>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </SidebarMenuBadge>
+                  ) : null}
                 </SidebarMenuItem>
               );
             })}

@@ -95,7 +95,9 @@ const FolderDetailPage = async ({
         title="Videos"
         videos={videos ?? []}
         folders={folders}
-        emptyText="No videos in this folder."
+        emptyText="No videos in this folder"
+        emptyHint="Move a video here from the Videos page, or create one in this folder."
+        emptyAction={<CreateVideo folders={folders} folderId={folder.id} />}
       />
     </div>
   );

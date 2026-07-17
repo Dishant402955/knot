@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,8 +12,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { clientWatchShareUrl } from "@/lib/share";
 
-import { ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react";
 
 const EditVideo = dynamic(
   () => import("./edit-video").then((mod) => ({ default: mod.EditVideo })),
@@ -45,6 +47,20 @@ const VideoActions = ({
 }) => {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [copying, setCopying] = useState(false);
+
+  const copyShareLink = async () => {
+    const url = clientWatchShareUrl(id);
+    setCopying(true);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied");
+    } catch {
+      toast.error("Could not copy link", { description: url });
+    } finally {
+      setCopying(false);
+    }
+  };
 
   return (
     <>
@@ -65,6 +81,18 @@ const VideoActions = ({
               <ExternalLink />
               Open watch page
             </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="cursor-pointer"
+            disabled={copying}
+            onSelect={(e) => {
+              e.preventDefault();
+              void copyShareLink();
+            }}
+          >
+            <Copy />
+            Copy share link
           </DropdownMenuItem>
 
           <DropdownMenuItem

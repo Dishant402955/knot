@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { folders, videoSegments, videos } from "@/db/schema";
 import { getSignedDownloadUrl, isB2Configured } from "@/lib/b2";
+import { withThumbnailUrls } from "@/lib/thumbnails";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -52,10 +53,12 @@ export const getAllUserVideos = async () => {
       .where(eq(videos.userId, user.id))
       .orderBy(desc(videos.createdAt));
 
+    const withThumbs = await withThumbnailUrls(data);
+
     return {
       success: true,
       status: 200,
-      videos: data,
+      videos: withThumbs,
       message: "Retrieved all the videos.",
     };
   } catch {
