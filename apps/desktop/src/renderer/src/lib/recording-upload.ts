@@ -61,6 +61,11 @@ export class RecordingUploadSession {
     return this.uploadedCount > 0 ? "READY" : "FAILED";
   }
 
+  /** True when at least one chunk upload failed (may still have playable early chunks). */
+  get hasPartialFailure() {
+    return this.failed && this.uploadedCount > 0;
+  }
+
   async start(title?: string): Promise<CloudSession> {
     const data = await this.json<CreateVideoResponse>("/api/videos", {
       method: "POST",
@@ -70,6 +75,10 @@ export class RecordingUploadSession {
         visibility: "PUBLIC",
       }),
     });
+
+    if (!data.success || !data.video?.id) {
+      throw new Error("Failed to create cloud recording session.");
+    }
 
     this.videoId = data.video.id;
     this.shareUrl = data.video.shareUrl;
@@ -87,15 +96,20 @@ export class RecordingUploadSession {
    * Queue a chunk upload (serialized). Local save should already be done.
    * One failed chunk does not abort later chunks.
    */
-  enqueueChunk(index: number, blob: Blob): Promise<string | null> {
+  enqueueChunk(
+    index: number,
+    blob: Blob,
+    durationSeconds = SEGMENT_DURATION_SECONDS,
+  ): Promise<string | null> {
     if (!this.videoId) {
       return Promise.resolve(null);
     }
 
     const videoId = this.videoId;
+    const duration = Math.max(0, Math.round(durationSeconds));
     const run = async () => {
       try {
-        await this.uploadOne(videoId, index, blob);
+        await this.uploadOne(videoId, index, blob, duration);
         this.uploadedCount += 1;
       } catch (error) {
         this.failed = true;
@@ -151,7 +165,12 @@ export class RecordingUploadSession {
     return this.shareUrl;
   }
 
-  private async uploadOne(videoId: string, index: number, blob: Blob) {
+  private async uploadOne(
+    videoId: string,
+    index: number,
+    blob: Blob,
+    durationSeconds: number,
+  ) {
     const contentType = blob.type?.startsWith("video/webm")
       ? blob.type
       : "video/webm";
@@ -161,7 +180,7 @@ export class RecordingUploadSession {
       method: "PUT",
       headers: {
         "Content-Type": contentType,
-        "X-Duration-Seconds": String(SEGMENT_DURATION_SECONDS),
+        "X-Duration-Seconds": String(durationSeconds),
       },
       body: blob,
     });

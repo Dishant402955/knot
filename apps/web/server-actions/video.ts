@@ -274,6 +274,7 @@ export const updateVideo = async ({
     revalidateVideoPaths(existing.folderId);
     revalidateVideoPaths(nextFolderId);
     revalidatePath(`/watch/${id}`);
+    revalidatePath(`/embed/${id}`);
 
     return {
       success: true,

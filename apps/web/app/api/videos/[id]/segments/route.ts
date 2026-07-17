@@ -10,7 +10,7 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/api-auth";
-import { segmentStorageKey } from "@/lib/b2";
+import { segmentStorageKey, MAX_SEGMENT_INDEX } from "@/lib/b2";
 
 export const OPTIONS = () => apiOptionsResponse();
 
@@ -39,9 +39,12 @@ export async function POST(request: Request, context: RouteContext) {
     if (
       body.index === undefined ||
       !Number.isInteger(body.index) ||
-      body.index < 0
+      body.index < 0 ||
+      body.index > MAX_SEGMENT_INDEX
     ) {
-      return badRequest("index must be a non-negative integer.");
+      return badRequest(
+        `index must be an integer between 0 and ${MAX_SEGMENT_INDEX}.`,
+      );
     }
 
     const expectedKey = segmentStorageKey(userId, id, body.index);

@@ -2,12 +2,12 @@
 
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { createNotification } from "@/lib/notifications";
 import { currentUser } from "@clerk/nextjs/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-export { createNotification };
+// Intentionally do NOT re-export createNotification — that helper must stay
+// server-only (lib/notifications) so clients cannot forge notifications.
 
 export const getAllUserNotifications = async () => {
   const user = await currentUser();

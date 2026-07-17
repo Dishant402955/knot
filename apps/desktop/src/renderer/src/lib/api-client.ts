@@ -24,22 +24,33 @@ export async function knotFetch(
   getToken: (options?: { skipCache?: boolean }) => Promise<string | null>,
   init: RequestInit = {},
 ): Promise<Response> {
-  const token = await getToken();
-  if (!token) {
-    throw new KnotApiError("You must be signed in.", 401);
-  }
-
   const base = await getApiBaseUrl();
-  const url = path.startsWith("http") ? path : `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = path.startsWith("http")
+    ? path
+    : `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${token}`);
+  const attempt = async (skipCache: boolean) => {
+    const token = await getToken(skipCache ? { skipCache: true } : undefined);
+    if (!token) {
+      throw new KnotApiError("You must be signed in.", 401);
+    }
 
-  const response = await fetch(url, {
-    ...init,
-    headers,
-    credentials: "omit",
-  });
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+
+    return fetch(url, {
+      ...init,
+      headers,
+      credentials: "omit",
+    });
+  };
+
+  let response = await attempt(false);
+
+  // Refresh Clerk token once on unauthorized (long recordings).
+  if (response.status === 401) {
+    response = await attempt(true);
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");

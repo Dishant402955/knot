@@ -5,7 +5,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/",
   "/watch(.*)",
-  "/r(.*)",
+  "/r/(.*)",
   "/embed(.*)",
 ]);
 

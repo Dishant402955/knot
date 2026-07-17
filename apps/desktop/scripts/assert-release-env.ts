@@ -54,6 +54,16 @@ if (!key) {
   errors.push(
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is missing (required for signed-in upload + auth).",
   );
+} else if (
+  !allowLocal &&
+  (key.includes("...") ||
+    key === "pk_live_..." ||
+    key === "pk_test_..." ||
+    key.length < 20)
+) {
+  errors.push(
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY still looks like a placeholder — paste a real pk_live_ / pk_test_ key.",
+  );
 }
 
 if (isLocalhost(webUrl) && !allowLocal) {
@@ -67,6 +77,15 @@ if (isLocalhost(webUrl) && !allowLocal) {
 if (!isLocalhost(webUrl) && !webUrl.startsWith("https://") && !allowLocal) {
   errors.push(
     `KNOT_WEB_APP_URL should use https for release builds (got "${webUrl}").`,
+  );
+}
+
+if (
+  !allowLocal &&
+  (webUrl.includes("your-domain") || webUrl.includes("example.com"))
+) {
+  errors.push(
+    `KNOT_WEB_APP_URL still looks like a placeholder ("${webUrl}"). Set your real https origin.`,
   );
 }
 

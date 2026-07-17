@@ -34,6 +34,7 @@ const CLERK_KEYS = [
   "KNOT_WEB_APP_URL",
   "VITE_CLERK_PUBLISHABLE_KEY",
   "VITE_KNOT_API_URL",
+  "VITE_CLERK_FAPI_HOST",
 ];
 
 export default defineConfig(({ mode }) => {

@@ -373,7 +373,7 @@ export function ControlApp() {
           frameOrigin,
           sessionId: session.sessionId,
           getWebcamBounds: () => window.knot.getWebcamBounds(),
-          onChunk: async (index, blob) => {
+          onChunk: async (index, blob, durationSeconds) => {
             if (blob.size === 0) return;
             if (epoch !== startEpochRef.current) return;
 
@@ -389,7 +389,11 @@ export function ControlApp() {
             const upload = uploadSessionRef.current;
             if (upload) {
               try {
-                const link = await upload.enqueueChunk(index, blob);
+                const link = await upload.enqueueChunk(
+                  index,
+                  blob,
+                  durationSeconds,
+                );
                 if (link) setShareUrl(link);
                 setMessage(
                   index === 0 && link
@@ -566,7 +570,7 @@ export function ControlApp() {
           const status = upload.finalizeStatus;
           finalShare = (await upload.finalize(status)) ?? finalShare;
           if (finalShare) setShareUrl(finalShare);
-          cloudMarkedFailed = status === "FAILED";
+          cloudMarkedFailed = upload.hasFailed || status === "FAILED";
         } catch (finalizeError) {
           finalizeFailedMessage = formatUploadError(finalizeError);
           // Capture already ended — don't leave the row stuck in RECORDING.
@@ -716,7 +720,7 @@ export function ControlApp() {
 
       const buffer = await blob.arrayBuffer();
       const saved = await window.knot.saveScreenshot({ buffer, format: "png" });
-      setMessage(`Screenshot â†’ ${saved.path}`);
+      setMessage(`Screenshot → ${saved.path}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Screenshot failed");
     } finally {

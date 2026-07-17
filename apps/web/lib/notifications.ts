@@ -31,6 +31,9 @@ export const createNotification = async ({
     })
     .returning();
 
+  revalidatePath("/dashboard/notifications");
+  revalidatePath("/dashboard");
+
   return row;
 };
 

@@ -243,6 +243,15 @@ export const createFolder = async ({
   }
 
   try {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return {
+        success: false,
+        status: 400,
+        message: "Folder name is required.",
+      };
+    }
+
     const existing = await db
       .select()
       .from(folders)
@@ -260,7 +269,7 @@ export const createFolder = async ({
       }
     }
 
-    if (hasSiblingWithName(existing, name, parentId ?? null)) {
+    if (hasSiblingWithName(existing, trimmedName, parentId ?? null)) {
       return {
         success: false,
         status: 409,
@@ -271,7 +280,7 @@ export const createFolder = async ({
     const data = await db
       .insert(folders)
       .values({
-        name,
+        name: trimmedName,
         userId: user.id,
         parentId: parentId ?? null,
       })
@@ -301,7 +310,8 @@ export const editFolder = async ({
 }: {
   id: string;
   folderName: string;
-  parentId?: string;
+  /** Omit to keep current parent; pass `null` to move to root. */
+  parentId?: string | null;
 }) => {
   const user = await currentUser();
 
@@ -329,7 +339,17 @@ export const editFolder = async ({
       };
     }
 
-    const nextParentId = parentId ?? null;
+    const nextParentId =
+      parentId === undefined ? folder.parentId : parentId;
+
+    const trimmedName = folderName.trim();
+    if (!trimmedName) {
+      return {
+        success: false,
+        status: 400,
+        message: "Folder name is required.",
+      };
+    }
 
     if (nextParentId === id) {
       return {
@@ -359,7 +379,7 @@ export const editFolder = async ({
       }
     }
 
-    if (hasSiblingWithName(data, folderName, nextParentId, id)) {
+    if (hasSiblingWithName(data, trimmedName, nextParentId, id)) {
       return {
         success: false,
         status: 409,
@@ -370,7 +390,7 @@ export const editFolder = async ({
     await db
       .update(folders)
       .set({
-        name: folderName,
+        name: trimmedName,
         parentId: nextParentId,
         updatedAt: new Date(),
       })

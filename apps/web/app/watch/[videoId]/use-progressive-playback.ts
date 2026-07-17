@@ -10,6 +10,13 @@ import {
 const POLL_BASE_MS = 2500;
 const POLL_MAX_MS = 8000;
 
+const contiguousKnownCount = (segments: WatchSegment[]) => {
+  const indices = new Set(segments.map((s) => s.index));
+  let n = 0;
+  while (indices.has(n)) n += 1;
+  return n;
+};
+
 const mergeSegments = (
   prev: WatchSegment[],
   next: WatchSegment[],
@@ -37,6 +44,7 @@ export function useProgressivePlayback(
   const pendingSeekRef = useRef<number | null>(null);
   const pollDelayRef = useRef(POLL_BASE_MS);
   const pollTimerRef = useRef<number | null>(null);
+  const statusRef = useRef(initialStatus);
 
   const [segments, setSegments] = useState(initialSegments);
   const [status, setStatus] = useState(initialStatus);
@@ -60,6 +68,7 @@ export function useProgressivePlayback(
     setSegments(initialSegments);
     segmentsRef.current = initialSegments;
     setStatus(initialStatus);
+    statusRef.current = initialStatus;
     setIndex(0);
     indexRef.current = 0;
     loadedKeyRef.current = null;
@@ -78,16 +87,29 @@ export function useProgressivePlayback(
   };
 
   const pollOnce = useCallback(async () => {
-    const res = await getWatchPlaybackState(
-      videoId,
-      segmentsRef.current.length,
-    );
+    const known = contiguousKnownCount(segmentsRef.current);
+    const prevStatus = statusRef.current;
+    const res = await getWatchPlaybackState(videoId, known);
     if (!res.success || !("segments" in res)) return;
 
+    statusRef.current = res.statusLabel;
     setStatus(res.statusLabel);
 
     const prevLen = segmentsRef.current.length;
-    const merged = mergeSegments(segmentsRef.current, res.segments);
+    let merged = mergeSegments(segmentsRef.current, res.segments);
+
+    // When recording finishes, resign everything once so gaps/late chunks appear.
+    if (
+      (prevStatus === "RECORDING" || prevStatus === "PROCESSING") &&
+      res.statusLabel === "READY" &&
+      res.segmentCount > contiguousKnownCount(merged)
+    ) {
+      const full = await getWatchPlaybackState(videoId, 0);
+      if (full.success && "segments" in full) {
+        merged = mergeSegments(merged, full.segments);
+      }
+    }
+
     segmentsRef.current = merged;
     setSegments(merged);
 

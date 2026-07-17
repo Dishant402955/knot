@@ -14,6 +14,7 @@ import {
 import {
   getSignedUploadUrl,
   isB2Configured,
+  MAX_SEGMENT_INDEX,
   segmentStorageKey,
 } from "@/lib/b2";
 
@@ -47,9 +48,12 @@ export async function POST(request: Request, context: RouteContext) {
     if (
       body.index === undefined ||
       !Number.isInteger(body.index) ||
-      body.index < 0
+      body.index < 0 ||
+      body.index > MAX_SEGMENT_INDEX
     ) {
-      return badRequest("index must be a non-negative integer.");
+      return badRequest(
+        `index must be an integer between 0 and ${MAX_SEGMENT_INDEX}.`,
+      );
     }
 
     const [video] = await db

@@ -103,7 +103,7 @@ const EditFolder = ({
     const response = await editFolder({
       id,
       folderName: values.name,
-      parentId: values.parentId === "root" ? undefined : values.parentId,
+      parentId: values.parentId === "root" ? null : values.parentId,
     });
 
     if (response.success) {

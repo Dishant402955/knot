@@ -11,6 +11,7 @@ import {
   unauthorized,
 } from "@/lib/api-auth";
 import { createNotification, notifyIfVideoBecamePublic } from "@/lib/notifications";
+import { revalidatePath } from "next/cache";
 
 export const OPTIONS = () => apiOptionsResponse();
 
@@ -117,6 +118,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     } catch {
       // Visibility update succeeded; notification is best-effort.
     }
+
+    revalidatePath(`/watch/${id}`);
+    revalidatePath(`/embed/${id}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/videos");
+    revalidatePath("/dashboard/notifications");
 
     return apiJson({
       success: true,

@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, protocol, session, shell } from "electron"
 import { createClerkBridge } from "@clerk/electron";
 import { storage } from "@clerk/electron/storage";
 import { existsSync } from "fs";
-import { join, resolve } from "path";
+import { isAbsolute, join, relative, resolve } from "path";
 import { pathToFileURL } from "url";
 
 import { IPC, type OAuthStatusPayload } from "../shared/types";
@@ -345,11 +345,16 @@ export async function registerKnotProtocol() {
     }
 
     const pathname = url.pathname === "/" ? "" : url.pathname;
-    const rendererRoot = join(__dirname, "../renderer");
-    const filePath =
+    const rendererRoot = resolve(join(__dirname, "../renderer"));
+    const unsafeRelative =
       pathname === "" || pathname === "/"
-        ? join(rendererRoot, "index.html")
-        : join(rendererRoot, pathname.replace(/^\//, ""));
+        ? "index.html"
+        : decodeURIComponent(pathname.replace(/^\//, ""));
+    const filePath = resolve(join(rendererRoot, unsafeRelative));
+    const rel = relative(rendererRoot, filePath);
+    if (rel.startsWith("..") || rel === ".." || isAbsolute(rel)) {
+      return new Response("Not found", { status: 404 });
+    }
 
     return net.fetch(pathToFileURL(filePath).toString());
   });

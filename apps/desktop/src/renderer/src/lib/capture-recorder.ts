@@ -23,7 +23,11 @@ export type RecorderOptions = {
   getWebcamBounds: () => Promise<WebcamBounds>;
   sessionId: string;
   /** Called once per complete, independently-playable WebM segment. */
-  onChunk: (index: number, blob: Blob) => Promise<void>;
+  onChunk: (
+    index: number,
+    blob: Blob,
+    durationSeconds: number,
+  ) => Promise<void>;
   onError?: (error: Error) => void;
 };
 
@@ -75,8 +79,8 @@ class WriteQueue {
       const task = this.queue.shift()!;
       try {
         await task();
-      } catch {
-        // Handler reports errors.
+      } catch (error) {
+        console.error("[knot] chunk write queue failed:", error);
       }
     }
     this.running = false;
@@ -93,6 +97,7 @@ type ActiveSegment = {
   index: number;
   recorder: MediaRecorder;
   parts: Blob[];
+  startedAt: number;
 };
 
 /**
@@ -125,6 +130,7 @@ export class CaptureRecorder {
   private mimeType = "video/webm";
   private stopping = false;
   private rotating = false;
+  private audioContext: AudioContext | null = null;
 
   get isRecording() {
     const state = this.active?.recorder.state;
@@ -304,14 +310,29 @@ export class CaptureRecorder {
 
       this.composedStream = this.canvas.captureStream(30);
 
-      for (const track of this.screenStream.getAudioTracks()) {
-        this.composedStream.addTrack(track);
+      // Mix mic + system audio into a single track — MediaRecorder often
+      // keeps only the first audio track when several are attached.
+      const audioSources: MediaStream[] = [];
+      if (this.screenStream.getAudioTracks().length > 0) {
+        audioSources.push(this.screenStream);
+      }
+      if (this.micStream && this.micStream.getAudioTracks().length > 0) {
+        audioSources.push(this.micStream);
       }
 
-      if (this.micStream) {
-        for (const track of this.micStream.getAudioTracks()) {
+      if (audioSources.length === 1) {
+        for (const track of audioSources[0]!.getAudioTracks()) {
           this.composedStream.addTrack(track);
         }
+      } else if (audioSources.length > 1) {
+        this.audioContext = new AudioContext();
+        const dest = this.audioContext.createMediaStreamDestination();
+        for (const stream of audioSources) {
+          const source = this.audioContext.createMediaStreamSource(stream);
+          source.connect(dest);
+        }
+        const mixed = dest.stream.getAudioTracks()[0];
+        if (mixed) this.composedStream.addTrack(mixed);
       }
 
       this.mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
@@ -369,7 +390,12 @@ export class CaptureRecorder {
       this.options?.onError?.(new Error("MediaRecorder error — stopping recording"));
     };
 
-    const segment: ActiveSegment = { index, recorder, parts };
+    const segment: ActiveSegment = {
+      index,
+      recorder,
+      parts,
+      startedAt: performance.now(),
+    };
     this.active = segment;
     recorder.start();
     return segment;
@@ -380,17 +406,22 @@ export class CaptureRecorder {
    */
   private finalizeSegment(segment: ActiveSegment): Promise<void> {
     return new Promise((resolve) => {
-      const { recorder, parts, index } = segment;
+      const { recorder, parts, index, startedAt } = segment;
       let settled = false;
 
       const finish = () => {
         if (settled) return;
         settled = true;
         const blob = new Blob(parts, { type: this.mimeType });
+        const elapsedSec = (performance.now() - startedAt) / 1000;
+        const durationSeconds = Math.max(
+          1,
+          Math.min(SEGMENT_DURATION_SECONDS + 2, Math.round(elapsedSec)),
+        );
         if (blob.size > 0 && this.options) {
           const opts = this.options;
           this.writeQueue.enqueue(async () => {
-            await opts.onChunk(index, blob);
+            await opts.onChunk(index, blob, durationSeconds);
           });
         }
         resolve();
@@ -649,5 +680,9 @@ export class CaptureRecorder {
     this.paused = false;
     this.stopping = false;
     this.rotating = false;
+    if (this.audioContext) {
+      void this.audioContext.close().catch(() => undefined);
+      this.audioContext = null;
+    }
   }
 }

@@ -40,7 +40,13 @@ export const searchMentionUsers = async ({
   }
 
   // Private videos: only the owner can be mentioned (matches createComment rules).
+  // Client-supplied visibility/ownerUserId are hints only — never trust them alone.
+  // Callers should pass the watch page's server-known values; we still require auth.
   if (visibility === "PRIVATE") {
+    if (user.id !== ownerUserId) {
+      // Non-owners viewing private videos shouldn't reach here, but don't leak search.
+      return { success: true, status: 200, users: [] };
+    }
     const owner = await getUserMentionProfile(ownerUserId);
     if (!owner || owner.id === user.id) {
       return { success: true, status: 200, users: [] };
@@ -51,6 +57,8 @@ export const searchMentionUsers = async ({
     return { success: true, status: 200, users: [owner] };
   }
 
+  // AUTHENTICATED / PUBLIC: still require a signed-in commenter (above).
+  // Exclude self; Clerk query is scoped to org directory via Backend API.
   const users = await searchUsersForMention(q, {
     excludeUserId: user.id,
     limit: 8,
