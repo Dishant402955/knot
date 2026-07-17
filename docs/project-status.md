@@ -22,6 +22,7 @@ How to run / ship: [getting-started.md](./getting-started.md), [operations.md](.
 | Comments | Timestamps, delete, `@mentions` + autocomplete, author names/avatars |
 | Notifications | COMMENT, MENTION, RECORDING_READY, VIDEO_SHARED |
 | Thumbnails | Desktop JPEG after chunk 0; dashboard cards + video poster |
+| In-page UI help | Page Agent (LLM) + comprehensive heuristics when no key — [page-agent.md](./page-agent.md) |
 | Packaging | electron-builder, icon, signing/notarize hooks, auto-update, release env assert |
 | Production B2 docs | [b2-production.md](./b2-production.md) |
 

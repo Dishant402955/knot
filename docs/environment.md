@@ -57,6 +57,13 @@ Production example: `https://your-domain.com`
 
 Server helpers: `apps/web/lib/b2.ts`.
 
+| `PAGE_AGENT_API_KEY` | No | Server-only LLM key for in-page UI help ([Page Agent](https://alibaba.github.io/page-agent/)). If unset, Guide heuristics take over. |
+| `OPENAI_API_KEY` | No | Fallback when `PAGE_AGENT_API_KEY` is empty |
+| `PAGE_AGENT_BASE_URL` | No | OpenAI-compatible API root (default `https://api.openai.com/v1`) |
+| `PAGE_AGENT_MODEL` | No | Model id (default `gpt-4o-mini`) |
+
+Never expose the LLM key via `NEXT_PUBLIC_*`. The browser calls `/api/page-agent/*` only; the server proxies to the provider.
+
 ### Assert / escape hatches
 
 | Variable | Purpose |

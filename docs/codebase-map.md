@@ -132,6 +132,7 @@ More narrative detail: [apps/desktop/README.md](../apps/desktop/README.md).
 | Chunk upload / READY | Desktop `recording-upload.ts` + web `segments/[index]/route.ts` |
 | Capture quality / audio | `capture-recorder.ts` |
 | Clerk desktop OAuth | `src/main/clerk.ts` + Clerk Native dashboard |
+| Help / Page Agent | `components/page-agent/`, `app/api/page-agent/`, `public/llms.txt` |
 | New DB column | Edit `db/schema.ts` → `pnpm --filter web db:generate` → review SQL → `db:migrate` |
 | Public route list | `apps/web/proxy.ts` |
 | B2 keys / CORS | `lib/b2.ts` + [b2-production.md](./b2-production.md) |

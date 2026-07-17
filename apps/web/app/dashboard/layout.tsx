@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/app/dashboard/_components/app-sidebar";
+import { PageAgentLauncher } from "@/components/page-agent/page-agent-launcher";
 import { UserButton } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -23,6 +24,7 @@ const DashboardLayout = async ({ children }: { children: React.ReactNode }) => {
           <div className="flex-1">{children}</div>
 
           <Toaster />
+          <PageAgentLauncher />
         </main>
       </SidebarProvider>
     </TooltipProvider>

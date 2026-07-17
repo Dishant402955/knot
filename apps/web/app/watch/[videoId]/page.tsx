@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ProgressivePlayer } from "@/app/watch/[videoId]/progressive-player";
+import { PageAgentLauncher } from "@/components/page-agent/page-agent-launcher";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { getCommentsForVideo } from "@/server-actions/comment";
@@ -138,6 +139,7 @@ const WatchPage = async ({ params }: WatchPageProps) => {
       </main>
 
       <Toaster />
+      <PageAgentLauncher />
     </div>
   );
 };

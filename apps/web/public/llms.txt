@@ -1,0 +1,27 @@
+# Knot — product context for AI page agents
+
+Knot is a Loom-style async video platform.
+
+## Main areas
+- /dashboard — overview of recent folders and videos
+- /dashboard/videos — video library (create, edit, share, delete, watch)
+- /dashboard/folders — nested folders
+- /dashboard/notifications — COMMENT, MENTION, RECORDING_READY, VIDEO_SHARED
+- /dashboard/settings — Clerk account profile
+- /watch/{id} — progressive playback, comments, share, embed
+- /r/{slug} — short share link (access-checked)
+- /embed/{id} — PUBLIC-only iframe player
+
+## Desktop recording
+Users record with the Electron desktop app. Chunks upload through the Next.js API to Backblaze B2. Desktop sessions default to Public visibility for live share links.
+
+## Helpful controls
+Prefer elements with data-knot attributes:
+- data-knot="create-video"
+- data-knot="create-folder"
+- data-knot="mark-all-read"
+- data-knot="sidebar-trigger"
+- data-knot="page-agent-launcher"
+
+## Safety
+Ask before deleting videos or folders. Do not invent admin APIs.

@@ -10,6 +10,7 @@ These docs are written for **humans** — step-by-step, with reasons, not just c
 | [Environment variables](./environment.md) | What each `.env` key means and where it is used |
 | [Codebase map](./codebase-map.md) | “Where do I change X?” — folders and key files |
 | [Operations](./operations.md) | Migrations, deploy, packaging, troubleshooting |
+| [Page Agent / UI help](./page-agent.md) | In-page AI assistant + heuristics Guide mode |
 | [Architecture](./architecture.md) | How the system is designed (deep dive) |
 | [Project status](./project-status.md) | What is done, what is left, intentional decisions |
 | [B2 production](./b2-production.md) | Production bucket, CORS, assert checklist |

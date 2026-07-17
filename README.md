@@ -71,6 +71,7 @@ Start with the human handbook index:
 | [Environment variables](./docs/environment.md) | Every env key explained |
 | [Codebase map](./docs/codebase-map.md) | Where to edit features |
 | [Operations](./docs/operations.md) | Migrations, deploy, packaging, troubleshooting |
+| [In-page UI help](./docs/page-agent.md) | Page Agent + heuristics when no LLM key |
 | [Architecture](./docs/architecture.md) | Full technical design |
 | [Project status](./docs/project-status.md) | Done vs optional remaining + intentional decisions |
 | [B2 production](./docs/b2-production.md) | Bucket, CORS, production assert |

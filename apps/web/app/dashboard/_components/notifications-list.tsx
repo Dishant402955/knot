@@ -123,6 +123,7 @@ const NotificationsList = ({
             className="cursor-pointer"
             disabled={pending}
             onClick={markAll}
+            data-knot="mark-all-read"
           >
             <CheckCheck className="mr-1.5 h-4 w-4" />
             Mark all read

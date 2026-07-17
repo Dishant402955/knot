@@ -139,6 +139,7 @@ pnpm --filter desktop dev
 3. Confirm a share / watch URL appears after the cloud session starts.
 4. Open that URL in the browser (or an incognito window for PUBLIC videos).
 5. Confirm progressive playback and that a thumbnail appears on the dashboard after chunk 0.
+6. On the dashboard, click the floating **sparkles** button (bottom-right) — UI Help. Without an LLM key it runs Guide mode; with `PAGE_AGENT_API_KEY` it uses Page Agent. See [page-agent.md](./page-agent.md).
 
 If upload fails with a B2 / network error while the UI otherwise works: your **API machine** may be blocked from reaching B2 (e.g. Cisco Umbrella). Deploy web somewhere that can reach B2, or allowlist `*.backblazeb2.com` for that host. Desktop does not need B2 allowlisted.
 

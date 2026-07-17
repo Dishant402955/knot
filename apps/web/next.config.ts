@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["page-agent", "@page-agent/core", "@page-agent/llms", "@page-agent/page-controller", "@page-agent/ui"],
   experimental: {
     // Keep recent soft-nav RSC payloads briefly so back/forward & revisit feel instant.
     // Mutations still refresh via revalidatePath in server actions.

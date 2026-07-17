@@ -126,6 +126,7 @@ const CreateFolder = ({
           <Button
             className="cursor-pointer"
             variant={parentId ? "secondary" : "default"}
+            data-knot="create-folder"
           >
             {parentId ? "Create Subfolder" : "+ Create Folder"}
           </Button>

@@ -147,6 +147,7 @@ const CreateVideo = ({
           <Button
             className="cursor-pointer"
             variant={folderId ? "secondary" : "default"}
+            data-knot="create-video"
           >
             {folderId ? "Add Video" : "+ Create Video"}
           </Button>

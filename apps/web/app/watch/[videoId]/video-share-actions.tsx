@@ -83,6 +83,7 @@ const VideoShareActions = ({
             size="sm"
             className="cursor-pointer flex-1 sm:flex-none"
             onClick={() => void copyShareLink()}
+            data-knot="copy-share-link"
           >
             <Copy className="mr-1.5 h-4 w-4" />
             Copy link
@@ -102,6 +103,7 @@ const VideoShareActions = ({
               }
               setEmbedOpen(true);
             }}
+            data-knot="open-embed"
           >
             <Code2 className="mr-1.5 h-4 w-4" />
             Embed

@@ -141,6 +141,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      page-agent:
+        specifier: ^1.12.2
+        version: 1.12.2(zod@4.4.3)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1612,6 +1615,22 @@ packages:
 
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
+
+  '@page-agent/core@1.12.2':
+    resolution: {integrity: sha512-Z/LX6WsXqlKp7VEbr5wyjG0bc1lux4sV4HT2byKzf4OZBxeosOKiSf6RoKeFQQ0uULAsNU6XR/j27tw2XHmr3w==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+
+  '@page-agent/llms@1.12.2':
+    resolution: {integrity: sha512-+fYOFCWi2q/lFsOWPoJCQ1Vir3WaynW47EfXlZtX+c2TkLwZRGXRVmpblup+7b0SmJ8JAy8dWEongCqf75aG2Q==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+
+  '@page-agent/page-controller@1.12.2':
+    resolution: {integrity: sha512-faiFb/lXMJJ6vDnxZ5Pdo/YE75X9FTGCDGbQuDbYEPOsoWo+pB1xTdfAkjDEkusbkZJdh8+mQoGTJ9yLOJkUkA==}
+
+  '@page-agent/ui@1.12.2':
+    resolution: {integrity: sha512-fCa5AZM3WxFUyHGkoTfc5tDI2hCMVBRLjpo5QTVsItdr0o+SKUWM76x7cX7NkP2zd6+QBGwqce2CRJCtquKfLQ==}
 
   '@peculiar/asn1-schema@2.8.0':
     resolution: {integrity: sha512-7YT0U/ze0tF2QOBbE15gKZwy5tvgGyLRiRHLzhlbOpf7BT032oBSd0haZqXn5W6l26WLlu3dyxzjM+2638/z2Q==}
@@ -3206,6 +3225,9 @@ packages:
   agentkeepalive@4.6.0:
     resolution: {integrity: sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ==}
     engines: {node: '>= 8.0.0'}
+
+  ai-motion@0.4.8:
+    resolution: {integrity: sha512-9nQVjf8lrYQWSW0sZdb9bES4x8Ei1w9C0S62po2KvRbMjslmjm0WMeszyW771SEauDnu4YGWqurLZ/gCkCTosQ==}
 
   ajv-formats@2.1.1:
     resolution: {integrity: sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==}
@@ -5717,6 +5739,11 @@ packages:
   p-try@2.2.0:
     resolution: {integrity: sha512-R4nPAVTAU0B9D35/Gk3uJf/7XYbQcyohSKdvAxIRSNghFl4e71hVoGnBNQz9cWaXxO2I10KTC+3jMdvvoKw6dQ==}
     engines: {node: '>=6'}
+
+  page-agent@1.12.2:
+    resolution: {integrity: sha512-0VWFxKULxuqpjYwGQMtCJf7y32MwUHTHTQcQL3QrHPAEMM3jy8WuLYAOjKNsvOfwGL4bFRdyeWQNjCPCsOor+w==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -8408,6 +8435,24 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
+  '@page-agent/core@1.12.2(zod@4.4.3)':
+    dependencies:
+      '@page-agent/llms': 1.12.2(zod@4.4.3)
+      '@page-agent/page-controller': 1.12.2
+      chalk: 5.6.2
+      zod: 4.4.3
+
+  '@page-agent/llms@1.12.2(zod@4.4.3)':
+    dependencies:
+      chalk: 5.6.2
+      zod: 4.4.3
+
+  '@page-agent/page-controller@1.12.2':
+    dependencies:
+      ai-motion: 0.4.8
+
+  '@page-agent/ui@1.12.2': {}
+
   '@peculiar/asn1-schema@2.8.0':
     dependencies:
       '@peculiar/utils': 2.0.3
@@ -10084,6 +10129,8 @@ snapshots:
   agentkeepalive@4.6.0:
     dependencies:
       humanize-ms: 1.2.1
+
+  ai-motion@0.4.8: {}
 
   ajv-formats@2.1.1(ajv@8.20.0):
     optionalDependencies:
@@ -12936,6 +12983,15 @@ snapshots:
       p-limit: 3.1.0
 
   p-try@2.2.0: {}
+
+  page-agent@1.12.2(zod@4.4.3):
+    dependencies:
+      '@page-agent/core': 1.12.2(zod@4.4.3)
+      '@page-agent/llms': 1.12.2(zod@4.4.3)
+      '@page-agent/page-controller': 1.12.2
+      '@page-agent/ui': 1.12.2
+      chalk: 5.6.2
+      zod: 4.4.3
 
   parent-module@1.0.1:
     dependencies:
